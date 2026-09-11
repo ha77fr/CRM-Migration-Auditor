@@ -1,0 +1,15 @@
+{
+  "version": "1",
+  "source_key": "Id",
+  "target_key": "LegacyId",
+  "fields": [
+    {"source": "Email", "target": "email", "normalizers": ["strip", "casefold"]},
+    {
+      "source": "Stage",
+      "target": "stage",
+      "value_map": {"Negotiation": "negotiation", "Closed Won": "won", "Prospecting": "prospecting"}
+    },
+    {"source": "Amount", "target": "amount", "comparison": "decimal", "tolerance": "0.01"}
+  ],
+  "key_map": {}
+}

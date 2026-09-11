@@ -1,0 +1,42 @@
+name: Backend checks
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - run: python -m pytest --cov=app --cov-report=term-missing
+
+  postgres-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: auditor
+          POSTGRES_PASSWORD: auditor
+          POSTGRES_DB: auditor
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U auditor -d auditor"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      AUDITOR_DATABASE_URL: postgresql+psycopg://auditor:auditor@localhost:5432/auditor
+      AUDITOR_AUTO_CREATE_SCHEMA: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install -e ".[postgres]"
+      - run: python -m alembic upgrade head
+      - run: python -m alembic check
+      - run: python -m alembic downgrade base
+      - run: python -m alembic upgrade head

@@ -1,0 +1,71 @@
+### Run in order with the API running. Add your API key below if configured.
+@baseUrl = http://127.0.0.1:8000
+@apiKey =
+
+### Check startup and schema
+GET {{baseUrl}}/health/ready
+
+### Create a project
+POST {{baseUrl}}/api/v1/projects
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{"name": "Example Salesforce to HubSpot migration"}
+
+> {% client.global.set("projectId", response.body.id); %}
+
+### Upload source
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/datasets?side=source
+X-API-Key: {{apiKey}}
+Content-Type: multipart/form-data; boundary=auditor-source
+
+--auditor-source
+Content-Disposition: form-data; name="file"; filename="source.csv"
+Content-Type: text/csv
+
+< ./examples/source.csv
+--auditor-source--
+
+> {% client.global.set("sourceId", response.body.id); %}
+
+### Upload target
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/datasets?side=target
+X-API-Key: {{apiKey}}
+Content-Type: multipart/form-data; boundary=auditor-target
+
+--auditor-target
+Content-Disposition: form-data; name="file"; filename="target.csv"
+Content-Type: text/csv
+
+< ./examples/target.csv
+--auditor-target--
+
+> {% client.global.set("targetId", response.body.id); %}
+
+### Start an audit (returns 202)
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/audits
+X-API-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "source_dataset_id": "{{sourceId}}",
+  "target_dataset_id": "{{targetId}}",
+  "contract": {
+    "source_key": "Id",
+    "target_key": "LegacyId",
+    "fields": [
+      {"source": "Email", "target": "email", "normalizers": ["strip", "casefold"]},
+      {"source": "Amount", "target": "amount", "comparison": "decimal", "tolerance": "0.01"}
+    ]
+  }
+}
+
+> {% client.global.set("auditId", response.body.id); %}
+
+### Poll status
+GET {{baseUrl}}/api/v1/projects/{{projectId}}/audits/{{auditId}}
+X-API-Key: {{apiKey}}
+
+### Read report after completed (409 while pending)
+GET {{baseUrl}}/api/v1/projects/{{projectId}}/audits/{{auditId}}/report
+X-API-Key: {{apiKey}}

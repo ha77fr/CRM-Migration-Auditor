@@ -1,0 +1,4 @@
+Id,Email,Stage,Amount
+001, Ada@Example.test ,Negotiation,100.00
+002,ben@example.test,Closed Won,200
+003,cy@example.test,Prospecting,300

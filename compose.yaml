@@ -1,0 +1,71 @@
+name: crm-migration-auditor
+
+x-app: &app
+  build: .
+  image: crm-migration-auditor:dev
+  environment:
+    AUDITOR_DATABASE_URL: postgresql+psycopg://auditor:auditor@db:5432/auditor
+    AUDITOR_STORAGE_DIR: /app/.data/uploads
+    AUDITOR_TASK_BACKEND: celery
+    AUDITOR_BROKER_URL: redis://redis:6379/0
+    AUDITOR_AUTO_CREATE_SCHEMA: "false"
+    AUDITOR_API_KEY: ${AUDITOR_API_KEY:-}
+  volumes:
+    - uploads:/app/.data
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: auditor
+      POSTGRES_PASSWORD: auditor
+      POSTGRES_DB: auditor
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auditor -d auditor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *app
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:

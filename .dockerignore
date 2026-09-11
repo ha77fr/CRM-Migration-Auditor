@@ -1,0 +1,13 @@
+.git
+.idea
+.venv*
+.env
+.env.*
+.data
+.scaffold-backup
+__pycache__
+.pytest_cache
+.ruff_cache
+*.egg-info
+htmlcov
+.coverage

@@ -1,0 +1,4 @@
+LegacyId,email,stage,amount
+001,ada@example.test,negotiation,100
+002,ben@example.test,won,250
+004,dee@example.test,prospecting,400
