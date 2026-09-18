@@ -16,6 +16,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--api-key", default=os.getenv("AUDITOR_API_KEY", ""))
+    parser.add_argument(
+        "--export-dir",
+        type=Path,
+        help="Optional directory for deterministic JSON and CSV report downloads",
+    )
     args = parser.parse_args()
     # Respect .env when the installed project is available.
     if not args.api_key:
@@ -47,6 +52,17 @@ def main() -> None:
         except HTTPError as exc:
             raise SystemExit(f"API returned {exc.code}: {exc.read().decode()}") from None
 
+    def download(path):
+        request = Request(
+            args.base_url.rstrip("/") + path,
+            headers={"Accept": "*/*", "X-API-Key": args.api_key},
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                return response.read()
+        except HTTPError as exc:
+            raise SystemExit(f"API returned {exc.code}: {exc.read().decode()}") from None
+
     project = call("POST", "/api/v1/projects", {"name": "Synthetic migration demo"})
     base = f"/api/v1/projects/{project['id']}"
     source = call("POST", base + "/datasets?side=source", file_path=EXAMPLES / "source.csv")
@@ -65,7 +81,14 @@ def main() -> None:
     while time.monotonic() < deadline:
         audit = call("GET", audit_path)
         if audit["status"] == "completed":
-            print(json.dumps(call("GET", audit_path + "/report"), indent=2))
+            report = call("GET", audit_path + "/report")
+            print(json.dumps(report, indent=2))
+            if args.export_dir is not None:
+                args.export_dir.mkdir(parents=True, exist_ok=True)
+                for suffix in ("json", "csv"):
+                    destination = args.export_dir / f"audit-report-{audit['id']}.{suffix}"
+                    destination.write_bytes(download(audit_path + f"/report.{suffix}"))
+                    print(f"Saved {destination}")
             return
         if audit["status"] == "failed":
             raise SystemExit(f"Execution failed: {audit['error_code']}")

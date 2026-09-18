@@ -69,3 +69,11 @@ X-API-Key: {{apiKey}}
 ### Read report after completed (409 while pending)
 GET {{baseUrl}}/api/v1/projects/{{projectId}}/audits/{{auditId}}/report
 X-API-Key: {{apiKey}}
+
+### Download deterministic JSON report after completed
+GET {{baseUrl}}/api/v1/projects/{{projectId}}/audits/{{auditId}}/report.json
+X-API-Key: {{apiKey}}
+
+### Download spreadsheet-safe CSV report after completed
+GET {{baseUrl}}/api/v1/projects/{{projectId}}/audits/{{auditId}}/report.csv
+X-API-Key: {{apiKey}}

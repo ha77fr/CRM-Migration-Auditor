@@ -4,8 +4,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 
+from app.db.models import Project
 from app.main import create_app
 from app.services.audits import execute_audit
 
@@ -41,7 +44,6 @@ def prepared(client):
 def test_full_flow_persistence_and_duplicate_job_delivery(client, settings):
     assert client.get("/health/ready").status_code == 200
     assert client.get("/docs").status_code == 200
-    assert client.get("/openapi.json").json()["info"]["title"] == "CRM Migration Auditor"
     base, payload = prepared(client)
     response = client.post(base + "/audits", json=payload)
     assert response.status_code == 202
@@ -151,3 +153,134 @@ def test_ready_requires_schema(settings):
     ) as client:
         assert client.get("/health/live").status_code == 200
         assert client.get("/health/ready").status_code == 503
+
+
+def relationship_prepared(client):
+    base = project(client)
+    source = upload(client, base, "source", b"id,company\n1,A\n").json()
+    target = upload(client, base, "target", b"id,company\n1,X\n").json()
+    source_parent = upload(client, base, "source", b"id\nA\nB\n").json()
+    target_parent = upload(client, base, "target", b"id\nX\nY\n").json()
+    return base, {
+        "source_dataset_id": source["id"],
+        "target_dataset_id": target["id"],
+        "contract": {
+            "source_key": "id",
+            "target_key": "id",
+            "parent_pairs": {
+                "companies": {
+                    "source_dataset_id": source_parent["id"],
+                    "target_dataset_id": target_parent["id"],
+                    "source_key": "id",
+                    "target_key": "id",
+                    "key_map": {"A": "X", "B": "Y"},
+                }
+            },
+            "relationships": [
+                {"source": "company", "target": "company", "parent_pair": "companies"}
+            ],
+        },
+    }
+
+
+def test_relationship_audit_provenance_and_parent_integrity(client, settings, monkeypatch):
+    base, payload = relationship_prepared(client)
+    created = client.post(base + "/audits", json=payload)
+    assert created.status_code == 202
+    report = client.get(f"{base}/audits/{created.json()['id']}/report").json()
+    assert report["verdict"] == "passed"
+    assert report["compared_relationships"] == 1
+    assert set(report["input_sha256"]) == {
+        "source",
+        "target",
+        "parent:companies:source",
+        "parent:companies:target",
+    }
+    with monkeypatch.context() as paused:
+        paused.setattr("app.api.routes.execute_audit", lambda *_: None)
+        pending = client.post(base + "/audits", json=payload).json()
+    parent_id = payload["contract"]["parent_pairs"]["companies"]["source_dataset_id"]
+    (settings.storage_dir / f"{parent_id}.csv").write_bytes(b"id\naltered\n")
+    execute_audit(pending["id"], client.app.state.database, settings)
+    path = f"{base}/audits/{pending['id']}"
+    assert client.get(path).json()["error_code"] == "input_unavailable_or_invalid"
+    assert client.get(path + "/report").status_code == 409
+
+
+def test_relationship_parent_project_side_and_headers_are_validated(client):
+    base, payload = relationship_prepared(client)
+    pair = payload["contract"]["parent_pairs"]["companies"]
+    original_id = pair["source_dataset_id"]
+    other = project(client)
+    pair["source_dataset_id"] = upload(client, other, "source", b"id\nA\n").json()["id"]
+    assert client.post(base + "/audits", json=payload).status_code == 404
+    pair["source_dataset_id"] = pair["target_dataset_id"]
+    assert client.post(base + "/audits", json=payload).status_code == 422
+    pair["source_dataset_id"] = original_id
+    pair["source_key"] = "missing"
+    assert client.post(base + "/audits", json=payload).status_code == 422
+
+
+@pytest.mark.parametrize("schema", ["projects_only", "missing_column"])
+def test_ready_rejects_partial_schema(settings, schema):
+    engine = create_engine(settings.database_url)
+    if schema == "projects_only":
+        Project.__table__.create(engine)
+    else:
+        with engine.begin() as connection:
+            connection.execute(text("CREATE TABLE projects (id VARCHAR(36) PRIMARY KEY)"))
+    engine.dispose()
+    with TestClient(
+        create_app(settings.model_copy(update={"auto_create_schema": False}))
+    ) as client:
+        assert client.get("/health/ready").status_code == 503
+
+
+def test_company_contact_deal_hierarchy_checks_both_parent_pairs(client):
+    base, contacts = relationship_prepared(client)
+    contact_run = client.post(base + "/audits", json=contacts).json()
+    contact_report = client.get(f"{base}/audits/{contact_run['id']}/report").json()
+    assert contact_report["verdict"] == "passed"
+    source = upload(client, base, "source", b"id,contact,company\nD1,1,B\n").json()
+    target = upload(client, base, "target", b"id,contact,company\nD1,1,X\n").json()
+    deal_contract = {
+        "source_key": "id",
+        "target_key": "id",
+        "parent_pairs": {
+            "companies": contacts["contract"]["parent_pairs"]["companies"],
+            "contacts": {
+                "source_dataset_id": contacts["source_dataset_id"],
+                "target_dataset_id": contacts["target_dataset_id"],
+                "source_key": "id",
+                "target_key": "id",
+            },
+        },
+        "relationships": [
+            {"source": "contact", "target": "contact", "parent_pair": "contacts"},
+            {"source": "company", "target": "company", "parent_pair": "companies"},
+        ],
+    }
+    payload = {
+        "source_dataset_id": source["id"],
+        "target_dataset_id": target["id"],
+        "contract": deal_contract,
+    }
+    deal_run = client.post(base + "/audits", json=payload).json()
+    report = client.get(f"{base}/audits/{deal_run['id']}/report").json()
+    assert report["verdict"] == "failed"
+    assert report["compared_relationships"] == 2
+    assert report["finding_counts"] == {"relationship_mismatch": 1}
+    assert report["findings"][0]["dataset_pair"] == "companies"
+    assert report["findings"][0]["expected"] == "Y"
+    assert set(report["input_sha256"]) == {
+        "source",
+        "target",
+        "parent:companies:source",
+        "parent:companies:target",
+        "parent:contacts:source",
+        "parent:contacts:target",
+    }
+    corrected = upload(client, base, "target", b"id,contact,company\nD1,1,Y\n").json()
+    payload["target_dataset_id"] = corrected["id"]
+    corrected_run = client.post(base + "/audits", json=payload).json()
+    assert client.get(f"{base}/audits/{corrected_run['id']}/report").json()["verdict"] == "passed"

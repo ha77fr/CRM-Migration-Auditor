@@ -1,17 +1,20 @@
 # CRM Migration Auditor
 
-A FastAPI backend starter for checking CRM migration exports. It includes a working
-CSV-to-report flow, a pure Python comparison engine, persistence, migrations,
-background-job adapters, and tests. The browser interface is Swagger at `/docs`;
-a custom frontend is a future milestone.
+A local FastAPI backend for checking CRM migration exports. It includes a working
+CSV-to-report flow, deterministic field and relationship comparison, persistence,
+migrations, background-job adapters, downloadable reports, and tests. The browser
+interface is Swagger at `/docs`; a custom frontend is a future milestone.
 
-## Run in your existing PyCharm project
+## Local setup
 
-Use **Python 3.14** and the existing `.venv` interpreter. Run these commands in the
-project root using PyCharm's PowerShell terminal:
+Use **Python 3.14**. Create a dedicated `.venv`, install the exact tested
+base/development dependencies, and install this project without resolving them again:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -20,19 +23,21 @@ Alternatively, run `main.py` directly. Set the working directory to the project 
 
 Open <http://127.0.0.1:8000/docs>. SQLite and the upload directory are created under
 `.data/` at startup. No Docker, Redis, cloud account, or AI key is needed locally.
-The separate `.venvUV` directory is not used or modified by this scaffold.
+Ignored virtual environments from other tools are not part of this setup; use the
+same `.venv` interpreter for installation, checks, and runtime commands.
 
 Run the synthetic example in a second terminal while the server is running:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/demo.py
+.\.venv\Scripts\python.exe scripts/demo.py --export-dir .data/demo-exports
 ```
 
 This creates a new project, uploads two sample files, submits the sample contract,
-polls the job, and prints its report. The expected result is **completed** with a
-**failed** verdict: one missing record, one unexpected record, and one changed amount.
-"Completed" describes successful execution; "failed" describes the data comparison.
-Each demo invocation creates a separate project.
+polls the job, prints its report, and saves deterministic JSON and CSV report
+downloads. The expected result is **completed** with a **failed** verdict: one missing
+record, one unexpected record, and one changed amount. "Completed" describes
+successful execution; "failed" describes the data comparison. Each demo invocation
+creates a separate project.
 
 `test_main.http` provides the same workflow in PyCharm's HTTP client, capturing IDs
 from preceding responses. Swagger also supports manual file uploads and submissions.
@@ -61,12 +66,14 @@ compose.yaml               PostgreSQL + Redis + API + worker development environ
 All business endpoints are below `/api/v1`:
 
 1. `POST /projects` — create a project.
-2. `POST /projects/{id}/datasets?side=source` — multipart `file` upload.
-3. Repeat the upload with `side=target`.
-4. `POST /projects/{id}/audits` — supply the two dataset IDs and an audit contract.
+2. `POST /projects/{id}/datasets?side=source` — upload each source CSV.
+3. Repeat uploads with `side=target` for each target CSV.
+4. `POST /projects/{id}/audits` — supply the primary dataset IDs, optional named
+   parent dataset pairs, and an audit contract.
 5. `GET /projects/{id}/audits/{audit_id}` — execution status.
-6. `GET /projects/{id}/audits/{audit_id}/report` — report after completion.
-7. `POST /projects/{id}/audits/{audit_id}/retry` — retry an execution that failed.
+6. `GET /projects/{id}/audits/{audit_id}/report` — inline report after completion.
+7. `GET .../report.json` or `GET .../report.csv` — deterministic report downloads.
+8. `POST /projects/{id}/audits/{audit_id}/retry` — retry an execution that failed.
 
 Projects, datasets, and audit runs also have list endpoints with `limit` and
 `offset`. `/health/live` checks HTTP availability; `/health/ready` checks the
@@ -87,6 +94,45 @@ Example contract (`examples/contract.json` contains a larger example):
 }
 ```
 
+To verify relationships, upload each parent object export as another source/target
+dataset pair, then reference those dataset IDs by a stable name:
+
+```json
+{
+  "version": "1",
+  "source_key": "ContactId",
+  "target_key": "LegacyContactId",
+  "fields": [],
+  "parent_pairs": {
+    "companies": {
+      "source_dataset_id": "11111111-1111-1111-1111-111111111111",
+      "target_dataset_id": "22222222-2222-2222-2222-222222222222",
+      "source_key": "AccountId",
+      "target_key": "LegacyAccountId",
+      "key_map": {}
+    }
+  },
+  "relationships": [
+    {
+      "source": "AccountId",
+      "target": "CompanyLegacyId",
+      "parent_pair": "companies",
+      "allow_empty": false
+    }
+  ]
+}
+```
+
+Replace the example UUIDs with the dataset IDs returned by your parent source and
+target uploads.
+
+Every referenced dataset must belong to the project and have the declared
+source/target side. Relationship checks use exact parent IDs or the parent pair's
+explicit one-to-one `key_map`; they do not guess fuzzy matches. A missing, duplicate,
+empty, or ambiguous parent makes the result `not_verified`. Different verified
+parents produce a `relationship_mismatch`. When `allow_empty` is true, only the case
+where both links are empty passes.
+
 IDs are exact strings: leading zeros and case are preserved. Prefer exporting a
 preserved legacy ID into the target. If IDs changed, provide a one-to-one
 `key_map`, e.g. `{"001": "HS-101"}`. Unmapped IDs use identity matching.
@@ -100,10 +146,12 @@ formats produce `invalid_value`. Numeric input is limited to 38 coefficient digi
 and exponents between -18 and +18. Decimal arithmetic does not perform currency conversion.
 
 The engine detects missing/unexpected records, duplicate/empty keys, ambiguous ID
-maps, changed fields, invalid decimal values, and empty datasets. Findings are
-deterministically ordered. Duplicate IDs are excluded from field comparisons.
-Verdicts: uncertainty takes precedence (`not_verified`), otherwise discrepancies
-mean `failed`, otherwise `passed` **within the declared scope only**.
+maps, changed fields, invalid decimal values, relationship mismatches, missing
+parents, and empty datasets. Findings are deterministically ordered and identify
+their relationship and dataset pair when applicable. Duplicate IDs are excluded
+from field and relationship comparisons. Verdicts: uncertainty takes precedence
+(`not_verified`), otherwise discrepancies mean `failed`, otherwise `passed`
+**within the declared scope only**.
 
 ## Configuration
 
@@ -112,6 +160,11 @@ Copy `.env.example` to `.env` if you need overrides. All settings use the
 200 columns, and reports to 1,000 findings. Counts still include all findings;
 the report explicitly marks truncation. Evidence strings are capped at 500
 characters. The immutable original file retains the complete value.
+
+JSON downloads preserve the stored report exactly. CSV downloads include verdict,
+row/comparison counts, finding counts, truncation state, scope, input hashes, and
+all finding columns. Cells that spreadsheet software could interpret as formulas
+are escaped; use the JSON download when exact finding text must be round-tripped.
 
 `AUDITOR_API_KEY` optionally requires an `X-API-Key` header on `/api/v1` endpoints.
 Use the **Authorize** button in Swagger. This is a single-user development guard.
@@ -161,10 +214,10 @@ API and worker must share the same settings and upload storage.
 .\.venv\Scripts\python.exe -m ruff format --check .
 ```
 
-`requirements-dev.lock` records the exact tested base/development dependencies.
-For a reproducible local setup: `pip install -r requirements-dev.lock`, then
-`pip install --no-deps -e .`. Optional worker/PostgreSQL dependencies are declared
-in `pyproject.toml`. CI checks Python 3.14 and the initial PostgreSQL migration.
+`requirements-dev.lock` records the exact tested base/development dependencies used
+by the setup above. Optional worker/PostgreSQL dependencies remain declared in
+`pyproject.toml`; install `.[worker,postgres]` in addition when those backends are
+needed. CI checks Python 3.14 and the initial PostgreSQL migration.
 
-The intended next milestone is cross-object relationship validation. See the
-roadmap before adding AI mapping, a frontend, or direct CRM connectors.
+The next milestones are review workflow and hosted-operation hardening. See the
+architecture roadmap before adding AI mapping, a frontend, or direct CRM connectors.

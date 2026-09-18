@@ -11,6 +11,8 @@ FindingCode = Literal[
     "invalid_value",
     "ambiguous_mapping",
     "empty_dataset",
+    "relationship_mismatch",
+    "missing_parent",
 ]
 
 
@@ -23,15 +25,18 @@ class Finding(BaseModel):
     actual: str | None = None
     # One-based DATA record index, excluding the header and skipped blank records.
     record_number: int | None = None
+    relationship: str | None = None
+    dataset_pair: str | None = None
 
 
 class AuditReport(BaseModel):
-    engine_version: str = "0.1.0"
+    engine_version: str = "0.2.0"
     verdict: Literal["passed", "failed", "not_verified"]
     source_rows: int
     target_rows: int
     matched_records: int
     compared_fields: int
+    compared_relationships: int = 0
     finding_counts: dict[str, int]
     findings: list[Finding]
     findings_truncated: bool

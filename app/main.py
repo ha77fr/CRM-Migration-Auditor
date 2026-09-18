@@ -4,9 +4,10 @@ from fastapi import FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.report_exports import router as report_exports_router
 from app.api.routes import router
 from app.core.config import Settings
-from app.db.models import Project
+from app.db.models import AuditRun, Dataset, Project
 from app.db.session import Database
 from app.services.storage import LocalStorage
 
@@ -29,19 +30,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title="CRM Migration Auditor",
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
         description=(
-            "Developer starter for comparing immutable CRM CSV exports. Create a project, "
-            "upload source/target datasets, and submit an explicit audit contract. "
-            "Default mode is local and single-user. Reports cover selected fields only."
+            "Local auditor for immutable CRM CSV exports. Create a project, upload "
+            "source/target datasets, and submit explicit field and relationship rules. "
+            "Reports and downloads cover only the declared scope."
         ),
     )
     application.include_router(router)
+    application.include_router(report_exports_router)
 
     @application.get("/", tags=["system"])
     def root():
-        return {"name": "CRM Migration Auditor", "version": "0.1.0", "docs": "/docs"}
+        return {"name": "CRM Migration Auditor", "version": "0.2.0", "docs": "/docs"}
 
     @application.get("/health/live", tags=["system"])
     def live():
@@ -51,7 +53,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ready():
         try:
             with application.state.database.sessions() as session:
-                session.execute(select(Project.id).limit(1))
+                for model in (Project, Dataset, AuditRun):
+                    session.execute(select(model).limit(0))
         except SQLAlchemyError:
             raise HTTPException(503, "Database or schema unavailable") from None
         return {"status": "ready", "task_backend": settings.task_backend}

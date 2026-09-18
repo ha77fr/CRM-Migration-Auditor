@@ -158,3 +158,46 @@ def test_rejects_missing_columns_and_many_to_one_mapping():
             key_map={"1": "3", "2": "3"},
             fields=[{"source": "value", "target": "value"}],
         )
+
+
+def test_exact_whitespace_headers_remain_addressable():
+    contract = AuditContract(
+        source_key=" id ",
+        target_key=" id ",
+        fields=[{"source": " value ", "target": " value "}],
+    )
+    report = compare(
+        read_csv(b" id , value \n001,A\n", 100),
+        read_csv(b" id , value \n001,A\n", 100),
+        contract,
+        100,
+    )
+    assert report.verdict == "passed"
+    assert report.compared_fields == 1
+
+
+@pytest.mark.parametrize("value", [" 1 ", "1_0", "\u0661"])
+def test_decimal_syntax_does_not_implicitly_normalize(value):
+    report = run(
+        f"id,value\n1,{value}\n",
+        "id,value\n1,1\n",
+        fields=[{"source": "value", "target": "value", "comparison": "decimal"}],
+    )
+    assert report.verdict == "not_verified"
+    assert report.finding_counts == {"invalid_value": 1}
+
+
+def test_decimal_whitespace_requires_explicit_strip():
+    report = run(
+        "id,value\n1, 1.0 \n",
+        "id,value\n1,1\n",
+        fields=[
+            {
+                "source": "value",
+                "target": "value",
+                "comparison": "decimal",
+                "normalizers": ["strip"],
+            }
+        ],
+    )
+    assert report.verdict == "passed"

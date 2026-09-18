@@ -32,22 +32,44 @@ def execute_audit(audit_id: str, database: Database, settings: Settings) -> None
     try:
         with database.sessions() as session:
             audit = session.get(AuditRun, audit_id)
-            source = session.get(Dataset, audit.source_dataset_id)
-            target = session.get(Dataset, audit.target_dataset_id)
+            contract = AuditContract.model_validate(audit.contract)
             storage = LocalStorage(settings.storage_dir)
-            source_bytes = storage.read(source.id, settings.max_upload_bytes)
-            target_bytes = storage.read(target.id, settings.max_upload_bytes)
-            if sha256(source_bytes).hexdigest() != source.sha256:
-                raise InvalidDataset("Source snapshot checksum mismatch")
-            if sha256(target_bytes).hexdigest() != target.sha256:
-                raise InvalidDataset("Target snapshot checksum mismatch")
-            report = compare(
-                read_csv(source_bytes, settings.max_rows),
-                read_csv(target_bytes, settings.max_rows),
-                AuditContract.model_validate(audit.contract),
-                settings.max_findings,
-            )
-            report.input_sha256 = {"source": source.sha256, "target": target.sha256}
+            tables = {}
+            hashes = {}
+
+            def load(dataset_id: str, side: str):
+                if dataset_id not in tables:
+                    dataset = session.get(Dataset, dataset_id)
+                    if (
+                        dataset is None
+                        or dataset.project_id != audit.project_id
+                        or dataset.side != side
+                    ):
+                        raise InvalidDataset("Dataset is unavailable in this project and side")
+                    content = storage.read(dataset_id, settings.max_upload_bytes)
+                    if sha256(content).hexdigest() != dataset.sha256:
+                        raise InvalidDataset("Snapshot checksum mismatch")
+                    tables[dataset_id] = read_csv(content, settings.max_rows)
+                    hashes[dataset_id] = dataset.sha256
+                return tables[dataset_id]
+
+            source = load(audit.source_dataset_id, "source")
+            target = load(audit.target_dataset_id, "target")
+            parent_tables = {
+                name: (
+                    load(str(pair.source_dataset_id), "source"),
+                    load(str(pair.target_dataset_id), "target"),
+                )
+                for name, pair in sorted(contract.parent_pairs.items())
+            }
+            report = compare(source, target, contract, settings.max_findings, parent_tables)
+            report.input_sha256 = {
+                "source": hashes[audit.source_dataset_id],
+                "target": hashes[audit.target_dataset_id],
+            }
+            for name, pair in sorted(contract.parent_pairs.items()):
+                report.input_sha256[f"parent:{name}:source"] = hashes[str(pair.source_dataset_id)]
+                report.input_sha256[f"parent:{name}:target"] = hashes[str(pair.target_dataset_id)]
         with database.sessions.begin() as session:
             session.execute(
                 update(AuditRun)

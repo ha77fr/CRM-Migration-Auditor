@@ -1,10 +1,11 @@
 # Architecture and extension roadmap
 
-## Scope of this starter
+## Scope of the local auditor
 
-This is a local, single-user backend foundation with a functioning vertical slice.
-It is not yet a hosted SaaS, a full CRM migration tool, or a certification of a
-complete migration. Only explicitly mapped fields in two uploaded tables are checked.
+This is a local, single-user backend with immutable CSV snapshots, deterministic
+field and relationship comparisons, and downloadable reports. It is not a hosted
+SaaS or certification of a complete migration. Only explicitly mapped fields,
+record IDs, and declared relationships are checked.
 The source CRM is never contacted and neither CRM is modified.
 
 ```mermaid
@@ -37,6 +38,63 @@ The three database tables are projects, datasets, and audit_runs. Findings are a
 bounded JSON report on an audit run. Move them to a dedicated table when you add
 paginated review, filtering, and per-finding acceptance decisions. JSON columns
 keep the initial schema portable between SQLite and PostgreSQL.
+
+## Relationship contracts
+
+The existing two-dataset contract remains valid. `parent_pairs` optionally names
+up to ten source/target parent dataset pairs. Each pair declares dataset UUIDs,
+exact `source_key`/`target_key` column names, and an optional one-to-one `key_map`.
+Names contain letters, digits, underscores, and hyphens, start with a letter, and
+are at most 64 characters. Every declared pair must be referenced by at least one
+relationship rule.
+
+Up to fifty `relationships` select the child source/target reference columns and
+their `parent_pair`. Contracts can omit `fields` for relationship-only audits,
+but must contain at least one field or relationship rule. Parent datasets must
+belong to the same project and have the requested source/target side and key
+headers. All input files are checksum-verified before comparison; each unique
+dataset is loaded once per execution, and each parent pair is indexed once.
+
+For each matched child, the engine resolves its source parent through the explicit
+crosswalk (identity for unmapped IDs), requires uniquely identified source and
+target parents, and compares the target reference with the expected target ID.
+An incorrect-but-existing parent produces `relationship_mismatch` and a failed
+verdict. A missing source, actual target, or expected target parent produces
+`missing_parent` and `not_verified`: parent identity cannot be verified. Duplicate
+or empty parent IDs and crosswalk/identity collisions also make the report
+`not_verified`, even when findings are truncated. Many-to-one crosswalks are
+rejected instead of guessing how merged records should be treated.
+
+References use exact strings, without value normalization. Empty references are
+valid only when both cells are exactly empty and the rule explicitly sets
+`allow_empty: true`. One empty cell never passes. Parent snapshots with no records
+remain unverified. Parent field equality, complete parent migration coverage, and
+transitive links are not implied: audit contacts against company pairs, then
+audit deals against contact and/or company pairs to cover a hierarchy explicitly.
+
+Reports retain `source` and `target` input hashes and add
+`parent:{pair_name}:source` and `parent:{pair_name}:target`. Relationship findings
+include `dataset_pair` and `relationship` (the target reference column).
+`compared_relationships` counts only links for which comparison was conclusive,
+including explicitly allowed empty links. Findings remain bounded and ordered;
+total finding counts and verdicts cover all admitted inputs.
+
+JSON and CSV downloads use the same project scoping, optional API key, and
+completed-run requirement as the report endpoint. Downloads include scope,
+truncation, totals, and snapshot hashes; a CSV export is not an exhaustive findings
+archive when the stored report is truncated.
+
+## Exact input semantics and readiness
+
+CSV header names are preserved and contract selectors address them exactly,
+including leading/trailing spaces. Decimal values accept signed ASCII digits,
+an optional decimal point, and an optional exponent; whitespace requires an
+explicit `strip` normalizer. Underscores, non-ASCII numerals, non-finite values,
+and values outside the documented numeric bounds are unverified.
+
+Readiness probes all mapped columns in projects, datasets, and audit runs without
+loading records. A partial or outdated schema is not ready. This does not verify
+worker availability or replace migrations.
 
 ## Job semantics
 
@@ -82,16 +140,16 @@ errors from invalid inputs and must never overwrite a newer attempt's result.
   Add an export manifest covering scope, filters, timestamps, selected fields, and
   association completeness. Missing coverage should be reported as unverified.
 
-## Suggested next milestones
+## Further milestones
 
-1. **Relationship verification:** extend a contract to reference multiple dataset
-   pairs plus explicit ID crosswalks. Compare source-to-target relationships, not
-   only whether referenced parents exist. Add company/contact/deal fixtures with
-   incorrect-but-existing parents, missing parents, duplicates, and merged records.
-   Preserve human-approved merge rules rather than allowing fuzzy matches to pass.
+Relationship verification and bounded report downloads are implemented. Remaining
+roadmap items are not requirements of the local single-user deliverable:
+
+1. **Relationship extensions:** human-approved merge rules and richer association
+   exports. Current single-parent references deliberately reject ambiguous merges.
 2. **Review workflow:** persist individual findings and append-only acceptance
    decisions with reviewer, reason, and timestamp. Link corrected runs and show
-   resolved/unresolved findings. Add a report export and a minimal frontend.
+   resolved/unresolved findings. Add a minimal frontend.
 3. **AI mapping suggestions:** define a provider interface that returns proposed
    `FieldRule` objects with evidence and confidence. Require approval before storing
    a contract. Start with column metadata and synthetic examples, add an evaluated

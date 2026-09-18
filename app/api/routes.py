@@ -178,6 +178,20 @@ def create_audit(
         payload.contract.validate_headers(datasets[0].headers, datasets[1].headers)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
+    for pair in payload.contract.parent_pairs.values():
+        for dataset_id, side, key in (
+            (pair.source_dataset_id, "source", pair.source_key),
+            (pair.target_dataset_id, "target", pair.target_key),
+        ):
+            dataset = session.get(Dataset, str(dataset_id))
+            if dataset is None or dataset.project_id != str(project_id):
+                raise HTTPException(404, "Parent dataset not found in this project")
+            if dataset.side != side:
+                raise HTTPException(
+                    422, "Parent dataset source/target side does not match the request"
+                )
+            if key not in dataset.headers:
+                raise HTTPException(422, "A parent key is absent from the selected dataset headers")
     audit = AuditRun(
         project_id=str(project_id),
         source_dataset_id=str(payload.source_dataset_id),

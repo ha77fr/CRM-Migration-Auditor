@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crm-migration-auditor"
-version = "0.1.0"
-description = "An extensible FastAPI starter for verifying CRM migration exports."
+version = "0.2.0"
+description = "A local FastAPI auditor for deterministic CRM migration export verification."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
