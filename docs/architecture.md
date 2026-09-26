@@ -2,15 +2,16 @@
 
 ## Scope of the local auditor
 
-This is a local, single-user backend with immutable CSV snapshots, deterministic
-field and relationship comparisons, and downloadable reports. It is not a hosted
-SaaS or certification of a complete migration. Only explicitly mapped fields,
-record IDs, and declared relationships are checked.
+This is a local, single-user application with immutable CSV snapshots, deterministic
+field and relationship comparisons, and downloadable reports. A React workspace
+shows readiness and projects; Swagger provides the complete API workflow. It is
+not a hosted SaaS or certification of a complete migration. Only explicitly mapped
+fields, record IDs, and declared relationships are checked.
 The source CRM is never contacted and neither CRM is modified.
 
 ```mermaid
 flowchart LR
-  Client[Swagger / future frontend] --> API[FastAPI]
+  Client[Swagger / React workspace] --> API[FastAPI]
   API --> DB[(PostgreSQL / local SQLite)]
   API --> Files[Immutable CSV snapshots]
   API --> Queue[Local task / Celery queue]
@@ -33,6 +34,9 @@ flowchart LR
   submitting a new run, preserving historical evidence.
 - `workers/`: Celery receives only an audit UUID. The database is the source of job
   state. The same use case runs in a thread after the response for local development.
+- `frontend/`: independent React + Vite app with a read-only readiness/project
+  overview. Development and preview proxy same-origin requests to FastAPI; deployed
+  static assets require an equivalent reverse proxy. Audit logic remains in Python.
 
 The three database tables are projects, datasets, and audit_runs. Findings are a
 bounded JSON report on an audit run. Move them to a dedicated table when you add
@@ -149,7 +153,7 @@ roadmap items are not requirements of the local single-user deliverable:
    exports. Current single-parent references deliberately reject ambiguous merges.
 2. **Review workflow:** persist individual findings and append-only acceptance
    decisions with reviewer, reason, and timestamp. Link corrected runs and show
-   resolved/unresolved findings. Add a minimal frontend.
+   resolved/unresolved findings. Extend the read-only React workspace with review UI.
 3. **AI mapping suggestions:** define a provider interface that returns proposed
    `FieldRule` objects with evidence and confidence. Require approval before storing
    a contract. Start with column metadata and synthetic examples, add an evaluated

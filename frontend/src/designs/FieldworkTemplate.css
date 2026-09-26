@@ -1,0 +1,85 @@
+.fieldwork-template { color: #313d36; background: #f5f2e9; border: 1px solid #e2dfd3; border-radius: 16px; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+.fieldwork-template .fw-header { padding: 25px 36px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dedfd4; }
+.fieldwork-template .fw-wordmark { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; letter-spacing: -0.7px; }
+.fieldwork-template .fw-mark { display: grid; place-items: center; width: 33px; height: 33px; background: #334d3e; color: #f7f3e9; border-radius: 50%; font: italic 26px Georgia, serif; }
+.fieldwork-template .fw-product, .fieldwork-template .fw-edition { color: #677165; font-size: 11px; letter-spacing: 0; font-weight: 400; }
+.fieldwork-template .fw-layout { padding: 48px 36px; display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr); gap: 55px; }
+.fieldwork-template .fw-kicker { color: #64725d; text-transform: uppercase; letter-spacing: 1.7px; font-size: 10px; font-weight: 700; }
+.fieldwork-template h2 { font: 400 clamp(32px, 3.3vw, 48px)/1.1 Georgia, 'Times New Roman', serif; letter-spacing: -1.6px; margin: 22px 0; }
+.fieldwork-template .fw-introduction { color: #626c60; font-size: 14px; line-height: 1.8; max-width: 290px; }
+.fieldwork-template .fw-steps { display: grid; gap: 10px; margin-top: 34px; }
+.fieldwork-template .fw-steps button { text-align: left; display: flex; align-items: center; gap: 13px; color: #53614f; background: none; border: 1px solid transparent; border-radius: 8px; padding: 14px 12px; cursor: pointer; }
+.fieldwork-template .fw-steps button[aria-pressed='true'] { background: #e6eadc; border-color: #d1d9c5; color: #2e452f; }
+.fieldwork-template .fw-steps button:hover { background: #e9ecdf; }
+.fieldwork-template .fw-step-number { font: 18px Georgia, serif; }
+.fieldwork-template .fw-steps strong { display: block; font-size: 13px; }
+.fieldwork-template .fw-steps small { display: block; margin-top: 5px; font-size: 11px; line-height: 1.5; }
+.fieldwork-template .fw-step-arrow { margin-left: auto; }
+.fieldwork-template .fw-margin-note { display: flex; gap: 13px; margin-top: 48px; }
+.fieldwork-template .fw-note-line { width: 3px; background: #adb998; flex-shrink: 0; }
+.fieldwork-template .fw-margin-note p { font: italic 13px/1.7 Georgia, serif; color: #6a7262; margin: 0; }
+.fieldwork-template .fw-paper { min-width: 0; background: #fffef9; padding: 30px; border: 1px solid #dfdfd1; box-shadow: 0 8px 30px #3e483407; position: relative; }
+.fieldwork-template .fw-paper::before { content: ''; position: absolute; top: -1px; left: 30px; width: 50px; height: 4px; background: #9baf7f; }
+.fieldwork-template .fw-paper-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 15px; }
+.fieldwork-template .fw-sheet-number { color: #78836b; font: 10px Consolas, monospace; white-space: nowrap; }
+.fieldwork-template h3 { font: 400 clamp(25px, 2.5vw, 35px)/1.17 Georgia, serif; letter-spacing: -0.8px; margin: 26px 0 15px; }
+.fieldwork-template .fw-lead { font-size: 12px; color: #65705f; line-height: 1.8; }
+.fieldwork-template .fw-verdict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; padding: 12px; background: #fbf1df; color: #835118; border: 1px solid #ecdabc; margin-top: 20px; }
+.fieldwork-template .fw-verdict > span:last-child { margin-left: auto; font-size: 10px; }
+.fieldwork-template .fw-verdict-dot { width: 6px; height: 6px; border-radius: 50%; background: #a56522; }
+.fieldwork-template .fw-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 24px 0; }
+.fieldwork-template .fw-summary > div + div { border-left: 1px solid #e6e7db; padding-left: 20px; }
+.fieldwork-template .fw-summary strong { display: block; font: 30px Georgia, serif; }
+.fieldwork-template .fw-summary span { display: block; color: #6e7567; font-size: 10px; margin-top: 7px; }
+.fieldwork-template .fw-findings { border-top: 1px solid #e4e5da; }
+.fieldwork-template details { border-bottom: 1px solid #e4e5da; }
+.fieldwork-template summary { display: flex; align-items: center; gap: 13px; list-style: none; padding: 16px 0; cursor: pointer; font-size: 12px; font-weight: 600; }
+.fieldwork-template summary::-webkit-details-marker { display: none; }
+.fieldwork-template summary:hover { color: #42672f; }
+.fieldwork-template .fw-finding-number { font: 11px Consolas, monospace; color: #869175; }
+.fieldwork-template summary small { display: block; font-size: 10px; font-weight: 400; color: #6f7965; margin-top: 5px; }
+.fieldwork-template .fw-expand { margin-left: auto; font-size: 18px; font-weight: 400; }
+.fieldwork-template details[open] .fw-expand { transform: rotate(45deg); }
+.fieldwork-template .fw-finding-body { font-size: 12px; line-height: 1.7; padding: 0 0 15px 27px; color: #5c6956; }
+.fieldwork-template .fw-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; }
+.fieldwork-template .fw-values > div { background: #f2f3ea; padding: 10px; }
+.fieldwork-template .fw-values dt { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.fieldwork-template .fw-values dd { margin: 4px 0 0; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+.fieldwork-template .fw-footnote { font-size: 10px; line-height: 1.7; color: #6e7665; margin: 20px 0; }
+.fieldwork-template .fw-page-actions { margin-top: 28px; padding-top: 20px; border-top: 1px solid #e3e5d9; display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+.fieldwork-template .fw-page-actions > span { color: #78816f; font-size: 10px; }
+.fieldwork-template .fw-page-actions button { border: 0; background: #344e3f; color: #fffef9; font-size: 11px; padding: 11px 14px; cursor: pointer; }
+.fieldwork-template .fw-page-actions button:hover { background: #23392d; }
+.fieldwork-template .fw-page-actions button span { margin-left: 12px; }
+.fieldwork-template .fw-export-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 28px 0; }
+.fieldwork-template .fw-export { padding: 16px; background: #f3f4ea; border: 1px solid #e1e5d5; min-width: 0; }
+.fieldwork-template h4 { margin: 12px 0 20px; font: 20px Georgia, serif; }
+.fieldwork-template .fw-row-count { font-size: 22px; margin: 0 0 16px; }
+.fieldwork-template .fw-row-count span { font-size: 10px; color: #6a7560; }
+.fieldwork-template code { font: 11px/1.7 Consolas, monospace; overflow-wrap: anywhere; }
+.fieldwork-template .fw-observation { font-size: 12px; line-height: 1.8; padding-left: 14px; border-left: 3px solid #b3c19b; }
+.fieldwork-template .fw-observation p { color: #66715e; }
+.fieldwork-template .fw-rules { margin: 28px 0; }
+.fieldwork-template .fw-rules > div { border-top: 1px solid #e3e5d9; padding: 17px 0; }
+.fieldwork-template .fw-rules dt { font-size: 12px; font-weight: 600; }
+.fieldwork-template .fw-rules dt span { font: 11px Consolas, monospace; color: #748065; margin-right: 10px; }
+.fieldwork-template .fw-rules dd { margin: 10px 0 0 27px; }
+.fieldwork-template .fw-rules dd p { font-size: 11px; color: #64715b; line-height: 1.6; margin-bottom: 0; }
+.fieldwork-template .fw-footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid #dedfd4; padding: 20px 36px; font-size: 10px; color: #6c7762; }
+@media (max-width: 900px) {
+  .fieldwork-template .fw-layout { gap: 28px; padding: 30px 24px; }
+  .fieldwork-template .fw-header { padding: 22px 24px; }
+  .fieldwork-template .fw-paper { padding: 24px; }
+}
+@media (max-width: 680px) {
+  .fieldwork-template .fw-header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 20px; }
+  .fieldwork-template .fw-layout { grid-template-columns: minmax(0, 1fr); padding: 24px 16px; gap: 24px; }
+  .fieldwork-template h2 { font-size: 37px; }
+  .fieldwork-template .fw-introduction { max-width: none; }
+  .fieldwork-template .fw-steps { margin-top: 20px; gap: 5px; }
+  .fieldwork-template .fw-margin-note { display: none; }
+  .fieldwork-template .fw-paper { padding: 22px 18px; }
+  .fieldwork-template .fw-summary > div + div { padding-left: 12px; }
+  .fieldwork-template .fw-export-grid { grid-template-columns: minmax(0, 1fr); }
+  .fieldwork-template .fw-footer { padding: 20px; }
+}

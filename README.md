@@ -1,9 +1,9 @@
 # CRM Migration Auditor
 
-A local FastAPI backend for checking CRM migration exports. It includes a working
+A local FastAPI application for checking CRM migration exports. It includes a working
 CSV-to-report flow, deterministic field and relationship comparison, persistence,
-migrations, background-job adapters, downloadable reports, and tests. The browser
-interface is Swagger at `/docs`; a custom frontend is a future milestone.
+migrations, background-job adapters, downloadable reports, and tests. A React
+frontend provides a read-only workspace; Swagger at `/docs` supports the full API.
 
 ## Local setup
 
@@ -42,6 +42,160 @@ creates a separate project.
 `test_main.http` provides the same workflow in PyCharm's HTTP client, capturing IDs
 from preceding responses. Swagger also supports manual file uploads and submissions.
 
+## React frontend
+
+The independent `frontend/` app uses **React 19**, **Vite 8**, and plain JavaScript
+with JSX. It is a working skeleton, not a replacement for the complete Swagger
+workflow: it checks backend readiness, lists the first 20 projects (oldest first),
+and links to the API docs. It does not create projects, upload CSVs, edit contracts,
+run audits, or display reports. Those operations remain available through Swagger
+and `scripts/demo.py`.
+
+The working workspace uses the selected **Atlas** design: a white navigation
+sidebar, cobalt accents, and a light dashboard layout that stacks on mobile.
+Overview, Projects, and Audit workflow links navigate within the page. The
+workspace still displays live API data only; the gallery's sample metrics and
+findings are not part of the working application.
+
+### Run locally
+
+Start FastAPI using the local setup above. In a second terminal, use **Node.js 24
+LTS** (Vite also supports Node 20.19+ or 22.12+):
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Open <http://127.0.0.1:5173>. Vite provides React Fast Refresh during development.
+The frontend and backend are separate processes; neither starts the other.
+Ports are strict, so an occupied port produces an error rather than silently
+opening the UI on another port.
+
+By default, Vite forwards `/api`, `/health`, `/docs`, and `/openapi.json` to
+`http://127.0.0.1:8000`, preserving paths. Browser requests stay on the frontend
+origin, so this setup needs no FastAPI CORS changes.
+
+For another backend address or an API-key-protected backend:
+
+```powershell
+# From frontend/
+Copy-Item .env.example .env.local
+```
+
+Edit `frontend/.env.local`:
+
+```dotenv
+API_PROXY_TARGET=http://127.0.0.1:8000
+API_PROXY_KEY=
+```
+
+Set `API_PROXY_KEY` to the same value as the backend's `AUDITOR_API_KEY` when
+required, then restart Vite. These values are read by Vite's Node process.
+The key is added to `/api` proxy requests as `X-API-Key`, not embedded in React
+or saved in browser storage. Never rename it with a `VITE_` prefix: that prefix
+exposes values to client code. `.env.local` is ignored by Git.
+
+Both Vite servers bind to localhost. Anyone who can access the proxy can use its
+configured API key; it is a local-development convenience, not user authentication.
+Opening Swagger through the frontend uses this proxy. Opening Swagger directly
+on port 8000 still requires its **Authorize** button when a key is configured.
+
+### Compare frontend designs
+
+Open <http://127.0.0.1:5173/designs.html> or use **Design previews** in the working
+app's sidebar (below the navigation on mobile). Three separate visual concepts are available:
+
+| Design | Direction | Preview interaction |
+| --- | --- | --- |
+| Atlas | Light operations dashboard, cobalt accents, sidebar navigation | Search findings and select record evidence |
+| Signal | Dark technical console, cyan/lime accents, dense audit details | Filter finding types and compare source/target values |
+| Fieldwork | Warm editorial layout, serif headings, guided review | Navigate exports/rules/evidence and expand findings |
+
+Each design has a direct link, for example
+`/designs.html?design=signal`. Missing or unknown design names show Atlas.
+Use the top cards to compare concepts; choosing one does not change the working
+app or persist a preference.
+
+The gallery uses explicitly synthetic fixtures from
+`frontend/src/designs/sampleData.js`; it makes no API requests and does not upload,
+run, or save audits. **FastAPI is not required to view the design gallery.**
+The sample has 240 records on each side, 239 shared IDs, 238 unchanged records,
+and three findings: one changed, one missing, and one unexpected record.
+Execution is completed while the audit verdict is failed.
+
+`frontend/designs.html` is a separate Vite entry with its own gallery and scoped
+template styles in `src/designs/`. The production build includes both HTML entry
+points, so the same gallery is available at
+<http://127.0.0.1:4173/designs.html> after `npm run build` and `npm run preview`.
+The real workspace's bundle does not import the design templates.
+
+### Structure and data flow
+
+```text
+frontend/
+  index.html                    HTML document and React root element
+  designs.html                  Separate synthetic design-gallery entry
+  package.json                  npm scripts and exact direct dependencies
+  package-lock.json             Reproducible dependency tree for npm ci
+  vite.config.js                React plugin, local servers, backend proxy
+  .env.example                  Optional server-side proxy settings
+  src/
+    main.jsx                    Mounts React with development StrictMode
+    App.jsx                     Page shell, workflow guidance, refresh state
+    api.js                      JSON requests and HTTP error messages
+    hooks/useApiResource.js      Loading/success/error state and cancellation
+    components/
+      BackendStatus.jsx         GET /health/ready
+      ProjectList.jsx           GET /api/v1/projects?limit=20&offset=0
+    styles.css                  Shared styles, focus states, mobile layout
+    designs/                    Atlas, Signal, Fieldwork, and shared sample fixtures
+```
+
+`App` owns a refresh counter. Each data component passes that counter and its
+endpoint to `useApiResource`. The hook fetches on mount and whenever either input
+changes. It clears old data during loading and exposes success or error state.
+An `AbortController` cancels obsolete requests on refresh or unmount; cancelled
+requests cannot overwrite newer state. React StrictMode exercises effect cleanup
+in development, so an initial cancelled request in the browser network panel is
+expected.
+
+Readiness and projects load independently: a healthy database does not imply that
+the project request is authorized. The UI distinguishes loading, API errors,
+an empty project list, and populated results. **Refresh workspace** reloads both
+sections without reloading the document. There is no polling or client-side cache.
+Readiness checks the API/database schema, not worker availability or audit verdicts.
+
+Components use semantic headings, a skip link, live status regions, visible
+keyboard focus, and a single-column layout on narrow screens. Project strings are
+rendered as React text, not raw HTML. There is no router, global state library,
+component framework, or HTTP dependency: one screen needs only React state and
+the browser's `fetch`.
+
+### Build and extend
+
+```powershell
+# From frontend/
+npm run build
+npm run preview
+```
+
+The build writes static assets to `frontend/dist/`. Preview serves that build at
+<http://127.0.0.1:4173> with the same local API proxy; it still requires FastAPI.
+Preview is a local build check, **not** a production server.
+
+For deployment, serve `dist/` through a static web server and route `/api`,
+`/health`, `/docs`, and `/openapi.json` to FastAPI on the same origin. Vite's proxy
+and `API_PROXY_*` settings do not travel with the static build. FastAPI and the
+existing Docker image do not serve these frontend files. Establish proper
+authentication and access controls before exposing either service publicly.
+
+To extend the UI, add focused components under `src/components/` and request
+functions in `src/api.js`. Keep audit rules in the backend. Add routing when there
+are distinct project/audit pages; add mutation-specific state for uploads and
+submissions rather than using the read-only resource hook for writes.
+
 ## Layout
 
 ```text
@@ -57,6 +211,7 @@ migrations/                Alembic schema history
 examples/                  Synthetic Salesforce-style and HubSpot-style exports
 scripts/demo.py            End-to-end API example using the standard library
 tests/                     Domain and API integration tests
+frontend/                  React + Vite read-only workspace and development proxy
 docs/architecture.md       Design decisions, limitations, and extension roadmap
 compose.yaml               PostgreSQL + Redis + API + worker development environment
 ```
@@ -220,4 +375,4 @@ by the setup above. Optional worker/PostgreSQL dependencies remain declared in
 needed. CI checks Python 3.14 and the initial PostgreSQL migration.
 
 The next milestones are review workflow and hosted-operation hardening. See the
-architecture roadmap before adding AI mapping, a frontend, or direct CRM connectors.
+architecture roadmap before extending the frontend, AI mapping, or CRM connectors.
