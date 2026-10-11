@@ -1,0 +1,14 @@
+.git
+.idea
+.venv*
+.data
+.scaffold-backup
+**/__pycache__
+**/.env
+**/.env.*
+**/node_modules
+**/dist
+**/playwright-report
+**/test-results
+**/coverage
+**/npm-debug.log*

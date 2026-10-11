@@ -16,3 +16,5 @@ build/
 dist/
 .scaffold-backup/
 node_modules/
+frontend/playwright-report/
+frontend/test-results/

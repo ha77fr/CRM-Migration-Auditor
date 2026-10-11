@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRM Migration Auditor — Interview Guide</title>
+<style>
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; color: #172239; background: #e9edf4; font: 10.5pt/1.38 Arial, Helvetica, sans-serif; }
+.page { width: 210mm; height: 297mm; padding: 15mm 17mm 19mm; margin: 8mm auto; background: white; position: relative; break-after: page; }
+.page:last-child { break-after: auto; }
+header { border-bottom: 1px solid #ccd5e5; padding-bottom: 3mm; margin-bottom: 5mm; color: #536078; font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; display: flex; justify-content: space-between; }
+h1 { font-size: 25pt; line-height: 1.12; letter-spacing: -.035em; margin: 0 0 5mm; }
+h2 { font-size: 19pt; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 4mm; }
+h3 { color: #3449ac; font-size: 11.5pt; line-height: 1.25; margin: 4mm 0 2mm; }
+p { margin: 0 0 2.7mm; }
+ul, ol { margin: 1.5mm 0 3mm; padding-left: 5.5mm; }
+li { margin-bottom: 1.8mm; }
+code { font: 8.8pt/1.35 Consolas, "Courier New", monospace; overflow-wrap: anywhere; }
+pre { background: #f4f6fb; border: 1px solid #d8dfec; padding: 3mm; margin: 2.5mm 0; font: 8.6pt/1.36 Consolas, "Courier New", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+pre code { font: inherit; }
+.callout { padding: 3mm 4mm; background: #f0f3fc; border-left: 3px solid #4458d8; margin: 3mm 0; }
+.callout p:last-child { margin-bottom: 0; }
+.small { color: #536078; font-size: 9pt; }
+.sources { border-top: 1px solid #d8dfec; padding-top: 2mm; margin-top: 4mm; font-size: 8.2pt; color: #536078; }
+.sources code { font-size: 8pt; }
+table { border-collapse: collapse; width: 100%; margin: 2.5mm 0 3.5mm; font-size: 9.3pt; line-height: 1.32; }
+th, td { text-align: left; vertical-align: top; padding: 2mm 2.5mm; border-bottom: 1px solid #d8dfec; }
+th { color: #3449ac; background: #f4f6fb; }
+td:first-child { width: 31%; }
+.qa { margin-bottom: 1mm; }
+.qa h3 { margin: 1.5mm 0 1.2mm; }
+.qa p { margin-bottom: 0; }
+.page[data-page="6"] li, .page[data-page="8"] li { margin-bottom: 1mm; }
+.page[data-page="6"] h3 { margin-top: 3mm; }
+.page[data-page="6"] pre { padding: 2mm 3mm; }
+.page[data-page="6"] .sources { margin-top: 2mm; }
+footer { position: absolute; left: 17mm; right: 17mm; bottom: 9mm; border-top: 1px solid #ccd5e5; padding-top: 2mm; display: flex; justify-content: space-between; font-size: 8pt; color: #536078; }
+a { color: #3449ac; }
+@media print { body { background: white; } .page { margin: 0; } }
+@media screen and (max-width: 820px) { body { overflow-x: auto; } .page { margin: 0 auto 5mm; } }
+</style>
+</head>
+<body>
+<section class="page" data-page="1">
+<header><span>CRM Migration Auditor</span><span>Understanding &amp; interview preparation</span></header>
+<main>
+<h1>Understand the project.<br>Explain the decisions.<br>Defend the limits.</h1>
+<p class="small">Eight-page study guide • Backend/engine version 0.2.0, with current frontend additions • Prepared 9 October 2026</p>
+<h3>1. Start with the business problem</h3>
+<p>A CRM (customer relationship management system) stores customers, contacts, companies, and deals. When records move between systems, IDs, field names, values, and links can change. Matching row counts alone does not establish that the right information moved.</p>
+<p>This auditor checks <strong>exported source and target CSV snapshots</strong> against an explicit JSON contract. It identifies missing or unexpected records, changed mapped values, ambiguous identities, and declared parent-link problems. It produces reviewable evidence rather than a blanket migration certificate.</p>
+<div class="callout"><strong>A 60-second explanation</strong><p>“CRM Migration Auditor is a local full-stack application for checking migration exports before cutover. A reviewer creates a project, uploads immutable source and target snapshots, and declares field and relationship rules. FastAPI validates and stores the run; a shared execution service invokes a deterministic Python engine. React shows job state, comparison verdict, findings, input hashes, and downloadable reports. The design favors exact identity and explicit uncertainty over guessing. It is a synthetic-data portfolio application, not a production multi-tenant service.”</p></div>
+<h3>2. Learn the five core concepts</h3>
+<ul>
+<li><strong>Project:</strong> groups related exports and runs; not an ownership or tenant boundary.</li>
+<li><strong>Dataset:</strong> one immutable CSV snapshot with a source/target side, exact headers, row count, and SHA-256 hash.</li>
+<li><strong>Contract:</strong> declared ID columns, field transformations, comparisons, ID translations, and optional relationships.</li>
+<li><strong>Audit run:</strong> a stored contract plus dataset references and execution state.</li>
+<li><strong>Report:</strong> verdict, counts, bounded findings, declared scope, and provenance.</li>
+</ul>
+<h3>3. Study in this order</h3>
+<p>Run and inspect the demo (page 2). Trace the construction and architecture (page 3). Explain the comparison rules (page 4), backend consistency (page 5), and frontend/delivery choices (page 6). Practice technical answers and scenarios (pages 7–8).</p>
+<p class="small"><strong>Interview honesty:</strong> adapt the explanation to work you personally understand and contributed. Describe assistance, including AI tools, accurately if asked. Do not claim live CRM integrations, production users, exactly-once jobs, or measurements this project does not have.</p>
+</main><footer><span>Study goal: explain the problem before naming frameworks.</span><span>1 / 8</span></footer>
+</section>
+
+<section class="page" data-page="2">
+<header><span>01 / Run &amp; observe</span><span>Learn from actual evidence</span></header>
+<main>
+<h2>Run it, then explain the result</h2>
+<p>Use Python 3.14 and Node.js 24. From the repository root, the Windows setup is:</p>
+<pre><code>py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000</code></pre>
+<p class="small">On macOS/Linux, create the environment with <code>python3.14 -m venv .venv</code> and replace the executable path with <code>.venv/bin/python</code>. Use the same interpreter for installation, runtime, and checks.</p>
+<p>Keep the API running. In a second terminal:</p>
+<pre><code>cd frontend
+npm ci
+npm run dev</code></pre>
+<p>Open <code>http://127.0.0.1:5173</code> and select <strong>Run synthetic demo</strong>. No Docker, Redis, cloud credentials, or AI key is needed. SQLite and uploaded snapshots live under <code>.data/</code>.</p>
+<h3>What to demonstrate</h3>
+<ol>
+<li>Show the stored contract: <code>Id</code> matches <code>LegacyId</code>; email uses <code>strip</code> then <code>casefold</code>; stages use explicit translations; amounts use Decimal tolerance <code>0.01</code>.</li>
+<li>Explain why execution is <strong>completed</strong> while comparison is <strong>failed</strong>. The software ran successfully and found data discrepancies.</li>
+<li>Filter findings, inspect exact JSON, and point to input hashes and scope.</li>
+<li>Download JSON/CSV, then reopen the run from audit history. Filters affect the view, not the exported report.</li>
+</ol>
+<table><thead><tr><th>Evidence</th><th>Expected bundled-demo result</th></tr></thead><tbody>
+<tr><td>Coverage</td><td>3 source rows, 3 target rows; 2 matched records; 6 field comparisons.</td></tr>
+<tr><td>Changed field</td><td><code>field_mismatch</code>: record <code>002</code>, amount <code>200</code> versus <code>250</code>.</td></tr>
+<tr><td>Missing / unexpected</td><td>Source record <code>003</code> has no target match; target record <code>004</code> has no source origin.</td></tr>
+</tbody></table>
+<p><strong>Read next:</strong> compare <code>examples/source.csv</code>, <code>target.csv</code>, and <code>contract.json</code> with the UI. To recreate the run without React, use <code>python scripts/demo.py --export-dir .data/demo-exports</code> with the project interpreter. Swagger is at <code>http://127.0.0.1:8000/docs</code>.</p>
+<div class="sources">Reference: <code>README.md</code>, <code>examples/</code>, <code>scripts/demo.py</code>, <code>frontend/src/components/SyntheticDemo.jsx</code>. The bundled demo covers fields, not parent relationships.</div>
+</main><footer><span>Checkpoint: account for every finding without guessing.</span><span>2 / 8</span></footer>
+</section>
+
+<section class="page" data-page="3">
+<header><span>02 / Architecture &amp; construction</span><span>Separate policy from infrastructure</span></header>
+<main>
+<h2>How the application is built</h2>
+<p>The table maps the current implementation. The steps below are a dependency-aware way to reconstruct it, not a claim about the historical order of commits.</p>
+<table><thead><tr><th>Layer / technology</th><th>Responsibility and code to inspect</th></tr></thead><tbody>
+<tr><td>Domain / Python + Pydantic</td><td><code>app/domain/</code>: typed contracts, CSV parsing, pure comparison, findings/report schemas. No HTTP or database dependency in the engine.</td></tr>
+<tr><td>Persistence / SQLAlchemy</td><td><code>app/db/</code>: projects, datasets, audit runs, sessions. SQLite locally; optional PostgreSQL. Alembic in <code>migrations/</code> versions schema changes.</td></tr>
+<tr><td>Use case / services</td><td><code>app/services/</code>: immutable file storage, checksum verification, job claiming, engine invocation, result persistence.</td></tr>
+<tr><td>Transport / FastAPI</td><td><code>app/api/</code>: request validation, project scoping, uploads, dispatch, status, retries, and report downloads. Uvicorn serves the ASGI application.</td></tr>
+<tr><td>Execution / task adapters</td><td>Local FastAPI background task or <code>app/workers/celery_app.py</code>. Celery uses Redis as broker; the database, not a Celery result backend, holds run state.</td></tr>
+<tr><td>Presentation / React + Vite</td><td><code>frontend/src/</code>: project and audit screens, contract builder, polling, evidence review. Vite develops/builds the UI; nginx serves packaged assets.</td></tr>
+</tbody></table>
+<h3>Reconstruct the build in six steps</h3>
+<ol>
+<li><strong>Define the contract first.</strong> Specify exact IDs/headers, allowed normalizers, comparisons, relationship rules, and invalid/ambiguous cases. Pydantic rejects unknown properties and invalid maps.</li>
+<li><strong>Implement and exercise the pure engine.</strong> Parse bounded inputs, index records, compare declared rules, and calculate verdicts. Domain tests make correctness independent of web infrastructure.</li>
+<li><strong>Add persistence and snapshots.</strong> Store metadata in three tables, original CSVs in UUID-named files, and contracts/reports as JSON. Local <code>create_all</code> bootstraps tables, not upgrades. Managed deployments disable auto-creation and apply Alembic migrations before startup.</li>
+<li><strong>Expose an API and shared execution service.</strong> Validate project/side/header references before creating runs. Commit a queued run, dispatch its UUID, claim it, verify bytes, compare, and persist completion or failure.</li>
+<li><strong>Build the reviewer workflow.</strong> React adds uploads, rule controls, history, status/error states, provenance, filters, and downloads. The guided demo uses the same real API.</li>
+<li><strong>Package and verify the boundaries.</strong> Lock dependencies, build static entries, add same-origin proxies, Compose services, domain/API tests, and a built-browser end-to-end regression.</li>
+</ol>
+<p><strong>Why these boundaries?</strong> Rules remain independently testable; local and Celery execution reuse one use case; the browser never decides the authoritative audit verdict.</p>
+<div class="sources">Read in order: <code>contracts.py</code>, <code>csv_reader.py</code>, <code>engine.py</code>, <code>db/models.py</code>, <code>services/audits.py</code>, <code>api/routes.py</code>, then <code>frontend/src/App.jsx</code>.</div>
+</main><footer><span>Checkpoint: describe one run across all layers.</span><span>3 / 8</span></footer>
+</section>
+
+<section class="page" data-page="4">
+<header><span>03 / Comparison rules</span><span>The core technical discussion</span></header>
+<main>
+<h2>Explain the engine precisely</h2>
+<h3>Identity before values</h3>
+<p><code>compare()</code> groups records by exact key strings. Leading zeros and case are preserved. An explicit one-to-one <code>key_map</code> translates source IDs; unmapped IDs use identity. Duplicate/blank keys and collisions between explicit mapping and identity are not guessed. Ambiguous records are excluded from conclusive comparisons.</p>
+<h3>Field processing</h3>
+<p>For each unique matched record, normalize the source value in declared order, apply its optional source-value map, and normalize the mapped result again. Normalize the target value with the same operations. Compare exact text, or evaluate <code>abs(expected - actual) &lt;= tolerance</code> with Python Decimal.</p>
+<p>Numeric cells use strict ASCII decimal syntax and bounds: at most 100 characters, 38 coefficient digits, and Decimal tuple exponent from −18 to +18. Blanks, underscores, non-finite numbers, and implicit whitespace are invalid; whitespace needs an explicit <code>strip</code>. Contract tolerance validation is separate: normalized precision is limited to 38 digits and 18 decimal places (at most 20 whole digits).</p>
+<table><thead><tr><th>Verdict</th><th>Meaning and precedence</th></tr></thead><tbody>
+<tr><td><code>not_verified</code></td><td>Uncertainty exists: duplicate/empty keys, invalid values, ambiguous mappings, empty datasets, or missing parents. Takes precedence even if discrepancies also exist.</td></tr>
+<tr><td><code>failed</code></td><td>No uncertainty finding, but a conclusive discrepancy exists: missing/unexpected records, field differences, or relationship mismatch.</td></tr>
+<tr><td><code>passed</code></td><td>No findings within the declared snapshots/rules. Not proof of export completeness or live-system correctness.</td></tr>
+</tbody></table>
+<h3>Relationships: contact → company as an example</h3>
+<p>A named parent pair references uploaded source/target company snapshots and their ID columns. A child rule identifies each contact’s company-reference columns. If source parent <code>A</code> explicitly maps to target parent <code>X</code>, the engine must establish unique parent identities and check that the migrated contact points to <code>X</code>.</p>
+<p>If it points to another verified parent <code>Y</code>, that is <code>relationship_mismatch</code>. If a necessary parent is absent or ambiguous, verification is uncertain. Two exactly empty references pass only with <code>allow_empty: true</code>. Reference IDs are not normalized; company fields and transitive relationships are not automatically checked.</p>
+<h3>Determinism, limits, and complexity</h3>
+<p>Sorted keys and stable rule order make findings reproducible. The default report retains 1,000 findings, but counts and verdict cover all admitted records; evidence strings are bounded. Default admission is 5 MiB/CSV, 25,000 records/CSV, and 200 columns. Parsing and indexes are in memory.</p>
+<p class="small">Complexity reasoning, not a benchmark: with fixed limits and rules, indexing is approximately linear; sorting distinct keys adds log factors. Field/link work grows with matched records × declared rules. Dictionary access is average O(1); memory still includes complete parsed primary/parent tables, not just retained findings.</p>
+<div class="sources">Reference: <code>app/domain/engine.py</code>, <code>contracts.py</code>, <code>csv_reader.py</code>, <code>tests/test_engine.py</code>, <code>tests/test_relationships.py</code>.</div>
+</main><footer><span>Checkpoint: distinguish uncertainty from a verified mismatch.</span><span>4 / 8</span></footer>
+</section>
+
+<section class="page" data-page="5">
+<header><span>04 / API, data &amp; jobs</span><span>Consistency and security boundaries</span></header>
+<main>
+<h2>Trace requests and failure modes</h2>
+<p>Business endpoints are under <code>/api/v1</code>. Replace <code>{p}</code> and <code>{a}</code> with project/audit UUIDs. Lists use bounded <code>limit</code> and non-negative <code>offset</code>.</p>
+<table><thead><tr><th>Request</th><th>Contract</th></tr></thead><tbody>
+<tr><td><code>POST /projects</code></td><td>Create a project: HTTP 201.</td></tr>
+<tr><td><code>POST /projects/{p}/datasets?side=source</code></td><td>Upload multipart CSV; repeat with target side: HTTP 201. Invalid input: 422; oversize admitted file: 413.</td></tr>
+<tr><td><code>POST /projects/{p}/audits</code></td><td>Dataset UUIDs plus contract; accepted run: 202. Invalid references/side/headers are rejected before execution.</td></tr>
+<tr><td><code>GET /projects/{p}/audits/{a}</code></td><td>Execution state. Report endpoints add <code>/report</code>, <code>/report.json</code>, or <code>/report.csv</code>; unavailable before completion: 409.</td></tr>
+<tr><td><code>POST …/{a}/retry</code></td><td>Only failed execution can requeue: 202, otherwise 409. Corrected data or rules need a new run.</td></tr>
+</tbody></table>
+<h3>Persisted facts and immutable evidence</h3>
+<p><code>Project</code> stores name/description; <code>Dataset</code> stores project, side, filename, headers, row count, and hash; <code>AuditRun</code> stores dataset references, contract, state, timestamps, error code, and report. CSV bytes are outside the database. Storage uses UUID paths and exclusive creation; client filenames never become paths. Execution rechecks project/side and SHA-256 before parsing each distinct snapshot.</p>
+<h3>Lifecycle and concurrency</h3>
+<p>A run moves from queued to running, then completed or failed. A conditional SQL update claims only a queued run; only the successful claimant executes. This prevents concurrent duplicate delivery from starting the same queued run twice. It does <strong>not</strong> guarantee exactly-once processing or automatic recovery.</p>
+<p>Creating the database row and publishing to the broker are separate operations. A crash between them can strand a queued run; process shutdown or worker failure can strand work. The current recovery for interrupted queued/running work is a new run, retaining old evidence. Reliable hosting would require a transactional outbox, expiring leases, and attempt fencing.</p>
+<p class="small"><strong>Terms to explain:</strong> an outbox stores the job and a publish intent in one database transaction, then a dispatcher publishes it. A lease is a time-limited worker claim. Fencing requires the current attempt token when persisting results, preventing a stale worker from overwriting a newer run attempt.</p>
+<h3>Security: what exists and what does not</h3>
+<p>An optional shared <code>X-API-Key</code> guards business endpoints; project-scoped checks prevent mixing references across projects. UUID secrecy is not user authorization. Public hosting needs authenticated users/tenants, ownership checks, quotas, pre-parser body limits, retention/deletion, encrypted storage, and backups.</p>
+<p>Error logs avoid uploaded values and exception text. Reports deliberately contain evidence and require the same access checks. CSV export prefixes formula-like cells; JSON preserves exact report values. A SHA-256 digest establishes byte identity, not exporter authenticity or completeness.</p>
+<div class="sources">Reference: <code>app/api/routes.py</code>, <code>report_exports.py</code>, <code>app/db/models.py</code>, <code>app/services/audits.py</code>, <code>docs/architecture.md</code>.</div>
+</main><footer><span>Checkpoint: name one crash window and a concrete mitigation.</span><span>5 / 8</span></footer>
+</section>
+
+<section class="page" data-page="6">
+<header><span>05 / Frontend, delivery &amp; proof</span><span>Explain behavior, not just tools</span></header>
+<main>
+<h2>The user interface and release path</h2>
+<h3>React behavior to understand</h3>
+<ul>
+<li><strong>Routing:</strong> hash routes select projects/audits. UUIDs are canonicalized to lowercase. The skip link focuses main content without changing the route.</li>
+<li><strong>Reads:</strong> <code>useApiResource</code> uses AbortController cleanup and ignores aborted responses so older requests cannot overwrite new state.</li>
+<li><strong>Writes:</strong> creation/upload/submission controls have independent in-flight locks and errors. A UI lock prevents accidental double submission; it is not server-wide idempotency.</li>
+<li><strong>Polling:</strong> queued/running jobs schedule the next fetch after success, about every 1.5 seconds. Terminal states or request errors stop polling. Manual reload resumes it.</li>
+<li><strong>Evidence:</strong> a failed execution refresh preserves a loaded completed report and its filters with a last-known-state warning. Report reload has its own error handling.</li>
+<li><strong>Drafts and scope:</strong> builder state survives project-tab switches but not route departure. Finding filters/page controls cover retained evidence only; downloads cover the stored report.</li>
+</ul>
+<h3>How requests reach the backend</h3>
+<p>Vite proxies same-origin <code>/api</code>, <code>/health</code>, <code>/docs</code>, and <code>/openapi.json</code>. Optional <code>API_PROXY_KEY</code> stays in the Node process, not React or browser storage. A <code>VITE_</code> prefix would expose it. This shared-key delegation is not public authentication.</p>
+<p>The build includes workspace/gallery entries; Vite preview is not a production server. Compose packages PostgreSQL, Redis, migrations, API, worker, and nginx-served React. Loopback ports are browser 8080 and API 8000. nginx injects no key: a keyed backend rejects business UI requests. Use Swagger authorization or the configured local Vite proxy.</p>
+<h3>Verification commands</h3>
+<pre><code># Repository root, using the project Python interpreter:
+python -m pytest --cov=app --cov-report=term-missing
+python -m ruff check .
+python -m ruff format --check .
+# frontend/ (after page 2 setup):
+npm run build
+npx playwright install chromium
+npm run test:e2e</code></pre>
+<p>Playwright exercises built assets, a real API, and temporary SQLite storage: uploads/rules, findings, history, exports, precision boundaries, keyboard navigation, uppercase IDs, and offline refresh. CI adds PostgreSQL migration and Compose smoke jobs.</p>
+<div class="callout"><strong>Evidence you can cite accurately</strong><p>The portfolio-completion run observed 55 backend tests passing, 97% app coverage (excluding the Celery adapter), Ruff passing, a successful production build, and one passing Chromium end-to-end test. Desktop/mobile smoke was exercised. Docker was unavailable: no local container/PostgreSQL/Celery runtime success was observed.</p></div>
+<div class="sources">Reference: <code>frontend/src/hooks/</code>, <code>components/AuditPage.jsx</code>, <code>vite.config.js</code>, <code>playwright.config.js</code>, <code>compose.yaml</code>, <code>.github/workflows/ci.yml</code>.</div>
+</main><footer><span>Checkpoint: separate configured checks from observed results.</span><span>6 / 8</span></footer>
+</section>
+
+<section class="page" data-page="7">
+<header><span>06 / Interview questions</span><span>Core answer outlines</span></header>
+<main>
+<h2>Practice concise technical answers</h2>
+<p class="small">Answer with: decision → mechanism → tradeoff → evidence. These are outlines, not a script to memorize.</p>
+<div class="qa"><h3>1. Why FastAPI and Pydantic?</h3><p>Typed request/response models, validation, dependency injection, and generated OpenAPI support an inspectable contract-driven API. Pydantic validates rules; routes validate project membership, dataset side, and required headers. Neither replaces engine tests or per-user authorization.</p></div>
+<div class="qa"><h3>2. Why a pure comparison engine?</h3><p>It separates business decisions from HTTP, storage, and queues. The same deterministic function can be tested with tables and used by local or Celery execution. Infrastructure remains in the service layer, so database failures are not confused with comparison verdicts.</p></div>
+<div class="qa"><h3>3. Why explicit mappings instead of fuzzy matching or AI?</h3><p>Wrong identity matches can create false assurance. Exact legacy IDs and approved one-to-one crosswalks are explainable and reproducible. Fuzzy/AI mapping suggestions could be reviewed separately in future; they should not silently determine the final audit.</p></div>
+<div class="qa"><h3>4. Why not compare amounts with float?</h3><p>Binary floating-point can misrepresent decimal values near tolerance boundaries. Decimal plus strict input bounds and sufficient arithmetic precision supports exact subtraction for admitted inputs. The rule is absolute tolerance, not currency conversion or percentage tolerance.</p></div>
+<div class="qa"><h3>5. Why SQLite locally and PostgreSQL optionally?</h3><p>SQLite removes setup friction for the synthetic local demo. SQLAlchemy and Alembic provide a path to PostgreSQL, but portability is not proof of identical locking or operational behavior. Test migrations and workload/concurrency on the intended database before hosting.</p></div>
+<div class="qa"><h3>6. Why store findings as JSON?</h3><p>A bounded report naturally belongs to an immutable run and is portable across the supported databases. It simplifies the local implementation. For exhaustive server-side filtering, analytics, or per-finding reviewer decisions, use a findings table and appropriate indexes.</p></div>
+<div class="qa"><h3>7. What do HTTP 202 and “completed” actually mean?</h3><p>202 accepts a run, not its comparison result. Completed means execution produced a report; that report may pass, fail, or remain unverified. A failed execution has an error code and no usable comparison verdict. The UI exposes those concepts separately.</p></div>
+<div class="qa"><h3>8. Is the background work asynchronous and durable?</h3><p>It is deferred from the request. Local synchronous work runs through FastAPI’s background-task mechanism, not a durable job queue. Optional Celery decouples execution with a broker, but the current database/broker crash window and missing recovery leases remain.</p></div>
+<div class="qa"><h3>9. What does the hash prove, and is the app secure?</h3><p>The hash ties execution to stored input bytes; it cannot prove a complete or trustworthy export. UUID paths, bounds, scoped checks, safe exports, and a shared key are useful controls. They do not provide tenants, per-user authorization, retention, or production upload isolation.</p></div>
+<div class="qa"><h3>10. What is the strongest testing evidence?</h3><p>Business-edge tests plus a built-browser workflow using the real API and persisted reports. Explain a concrete boundary or state-transition regression rather than treating the coverage percentage as a correctness certificate. Name untested operational boundaries explicitly.</p></div>
+</main><footer><span>Checkpoint: support each answer with a file or demonstrated behavior.</span><span>7 / 8</span></footer>
+</section>
+
+<section class="page" data-page="8">
+<header><span>07 / Scenarios &amp; rehearsal</span><span>Reason under follow-up questions</span></header>
+<main>
+<h2>Prepare for “what happens if…?”</h2>
+<div class="qa"><h3>11. Both exports have the same number of rows. Why fail?</h3><p>Counts ignore identity and values. The bundled example loses record 003, adds 004, and changes 002’s amount while keeping equal row counts. Show record-level findings instead of arguing from aggregate totals.</p></div>
+<div class="qa"><h3>12. The source has duplicate IDs, or a mapping collides?</h3><p>Do not select the first record or invent merge behavior. Duplicate/ambiguous identities produce uncertainty and are excluded from conclusive comparisons. Explicit maps are one-to-one; runtime also detects collisions with unmapped identity destinations.</p></div>
+<div class="qa"><h3>13. Two workers receive the same audit, then one crashes?</h3><p>The conditional queued-state claim allows one execution to start. A crash after claiming may leave running state indefinitely. Explain the limitation; propose leases and attempt tokens so an old worker cannot overwrite a newer attempt, plus an outbox for reliable dispatch.</p></div>
+<div class="qa"><h3>14. The API is ready, but the audit never finishes?</h3><p>Readiness checks database/schema, not workers. Inspect execution status, task-backend configuration, broker/worker availability, and shared snapshot storage. Inspect safe error codes/logs. Do not infer a passed verdict or blindly requeue running work.</p></div>
+<div class="qa"><h3>15. The customer wants millions of rows or merged records?</h3><p>Do not merely raise limits. Benchmark CPU/memory, account for parent tables, and design chunking or a disk-backed join/analytical engine with deterministic output and resource budgets. Merges need new explicit identity semantics; the current one-to-one model deliberately rejects them.</p></div>
+<div class="qa"><h3>16. What real bug can you explain in detail?</h3><p>Use the skip-link defect: <code>#main</code> was interpreted as a hash route, unmounting the active page. Reproduce with keyboard activation, prevent route navigation, explicitly focus main, and verify route/report-filter preservation in Chromium. If using this story, describe your contribution and assistance accurately.</p></div>
+<h3>A rehearsal you can repeat</h3>
+<ol>
+<li><strong>Pitch:</strong> explain the customer problem and scope in one minute.</li>
+<li><strong>Demo:</strong> show findings, rules, hashes, history, and the CLI fallback.</li>
+<li><strong>Code:</strong> trace <code>create_audit → dispatch → execute_audit → compare</code>.</li>
+<li><strong>Tradeoff:</strong> defend a choice, name its limit, propose a concrete mitigation.</li>
+<li><strong>Ownership:</strong> distinguish your contributions, assistance, and independently verified work.</li>
+</ol>
+<div class="callout"><strong>Ready-to-interview checklist</strong><p>Can you predict a mismatch versus an uncertain verdict; configure a parent-link rule; explain a crash window; point to a regression; distinguish observed checks from configured CI; and name the first production-hardening priorities? If not, revisit the corresponding page and code before rehearsing again.</p></div>
+<p class="small"><strong>First hosting priorities:</strong> tenant authorization and pre-parser upload controls; durable dispatch/recovery; secure storage/retention/backups; workload limits and operational monitoring. Live connectors and AI suggestions are separate product features, not fixes for those boundaries.</p>
+</main><footer><span>Further reading: README.md and docs/architecture.md.</span><span>8 / 8</span></footer>
+</section>
+</body>
+</html>

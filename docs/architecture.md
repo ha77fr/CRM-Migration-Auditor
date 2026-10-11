@@ -3,10 +3,11 @@
 ## Scope of the local auditor
 
 This is a local, single-user application with immutable CSV snapshots, deterministic
-field and relationship comparisons, and downloadable reports. A React workspace
-shows readiness and projects; Swagger provides the complete API workflow. It is
-not a hosted SaaS or certification of a complete migration. Only explicitly mapped
-fields, record IDs, and declared relationships are checked.
+field and relationship comparisons, and downloadable reports. The React workspace
+supports project creation, uploads, visual contracts, audit history, execution
+status/retry, and report inspection. Swagger exposes the same API directly.
+It is not a hosted SaaS or certification of a complete migration. Only explicitly
+mapped fields, record IDs, and declared relationships are checked.
 The source CRM is never contacted and neither CRM is modified.
 
 ```mermaid
@@ -34,14 +35,37 @@ flowchart LR
   submitting a new run, preserving historical evidence.
 - `workers/`: Celery receives only an audit UUID. The database is the source of job
   state. The same use case runs in a thread after the response for local development.
-- `frontend/`: independent React + Vite app with a read-only readiness/project
-  overview. Development and preview proxy same-origin requests to FastAPI; deployed
-  static assets require an equivalent reverse proxy. Audit logic remains in Python.
+- `frontend/`: independent React + Vite workspace with hash-based project/audit
+  routes, abortable reads, mutation-specific state, and terminal-aware polling.
+  The guided demo imports the canonical CSV/contract examples and submits real
+  API operations, not canned reports. Development/preview proxy same-origin
+  requests through Vite; Compose serves built assets through nginx. Audit
+  semantics remain in Python, with backend validation authoritative.
 
 The three database tables are projects, datasets, and audit_runs. Findings are a
-bounded JSON report on an audit run. Move them to a dedicated table when you add
-paginated review, filtering, and per-finding acceptance decisions. JSON columns
-keep the initial schema portable between SQLite and PostgreSQL.
+bounded JSON report on an audit run. The browser filters and paginates retained
+evidence locally; total counts and truncation state remain visible. Move findings
+to a dedicated table before adding exhaustive server-side finding queries or
+per-finding acceptance decisions. JSON columns keep the current schema portable
+between SQLite and PostgreSQL.
+
+Browser contract previews validate exact headers, map uniqueness, relationship
+references, and normalized decimal tolerance bounds without binary-float rounding.
+Historical contracts cannot be edited. Drafts survive project-tab switches, not
+route departure; changes require a new run. A completed run's loaded report remains
+visible if execution refresh fails, alongside the last-known-state warning.
+
+The frontend container builds from the repository root so the canonical examples
+are available without maintaining fixture copies. A Dockerfile-specific ignore
+file excludes dependencies, local secrets, and generated artifacts; the backend
+image retains its separate frontend exclusion. nginx preserves API paths and
+resolves the API service through Docker DNS after container recreation. Compose
+exposes only loopback browser/API ports. No proxy authentication bypass or
+browser-embedded API key is added.
+
+CI checks locked Python dependencies, domain/API behavior, PostgreSQL migrations,
+and the built browser workspace against an isolated real SQLite API. Browser
+checks are not proof of Celery dispatch or container-runtime correctness.
 
 ## Relationship contracts
 
@@ -153,7 +177,8 @@ roadmap items are not requirements of the local single-user deliverable:
    exports. Current single-parent references deliberately reject ambiguous merges.
 2. **Review workflow:** persist individual findings and append-only acceptance
    decisions with reviewer, reason, and timestamp. Link corrected runs and show
-   resolved/unresolved findings. Extend the read-only React workspace with review UI.
+   resolved/unresolved findings. Current evidence inspection does not imply
+   persistent human approval.
 3. **AI mapping suggestions:** define a provider interface that returns proposed
    `FieldRule` objects with evidence and confidence. Require approval before storing
    a contract. Start with column metadata and synthetic examples, add an evaluated

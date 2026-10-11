@@ -1,9 +1,30 @@
 # CRM Migration Auditor
 
-A local FastAPI application for checking CRM migration exports. It includes a working
-CSV-to-report flow, deterministic field and relationship comparison, persistence,
-migrations, background-job adapters, downloadable reports, and tests. A React
-frontend provides a read-only workspace; Swagger at `/docs` supports the full API.
+A local, single-user application for verifying CRM migration CSV exports before
+cutover. The React workspace supports project creation, immutable uploads, explicit
+field and relationship contracts, audit history, evidence review, and JSON/CSV
+downloads. FastAPI, SQLAlchemy, and a pure Python comparison engine provide the
+same workflow through an API; PostgreSQL and Celery are optional.
+
+**What it demonstrates:** deterministic comparison rather than fuzzy guessing,
+exact ID crosswalks, uncertainty-aware verdicts, checksum provenance, immutable
+contracts, bounded evidence, project-scoped access, and real-browser integration
+with a persisted backend.
+
+**Scope:** a local portfolio application using synthetic data, not a public SaaS.
+It never contacts or modifies a CRM. A passed report verifies only the uploaded
+snapshots and declared rules, not the completeness of an entire migration.
+
+![Real synthetic audit report with failed verdict, provenance, and amount mismatch evidence](docs/audit-report.png)
+
+The screenshot is from the working application, not the design gallery.
+
+## Interview preparation
+
+Read the [eight-page interview guide (PDF)](docs/crm-migration-auditor-interview-guide.pdf)
+for the study sequence, build walkthrough, demo checklist, and 16 project-specific
+interview questions with answer outlines. The [editable, printable HTML source](docs/crm-migration-auditor-interview-guide.html)
+is self-contained and can be opened directly in a browser.
 
 ## Local setup
 
@@ -44,18 +65,20 @@ from preceding responses. Swagger also supports manual file uploads and submissi
 
 ## React frontend
 
-The independent `frontend/` app uses **React 19**, **Vite 8**, and plain JavaScript
-with JSX. It is a working skeleton, not a replacement for the complete Swagger
-workflow: it checks backend readiness, lists the first 20 projects (oldest first),
-and links to the API docs. It does not create projects, upload CSVs, edit contracts,
-run audits, or display reports. Those operations remain available through Swagger
-and `scripts/demo.py`.
+The independent `frontend/` app uses **React 19**, **Vite 8**, and JavaScript/JSX.
+The responsive **Atlas** workspace provides:
 
-The working workspace uses the selected **Atlas** design: a white navigation
-sidebar, cobalt accents, and a light dashboard layout that stacks on mobile.
-Overview, Projects, and Audit workflow links navigate within the page. The
-workspace still displays live API data only; the gallery's sample metrics and
-findings are not part of the working application.
+- Paginated projects and audit history, project creation, and backend readiness.
+- Source/target CSV uploads with exact headers, row counts, and snapshot identity.
+- A visual contract builder: field mappings, ordered normalizers, value maps,
+  decimal tolerances, primary ID maps, parent pairs, and relationship rules.
+- Automatic queued/running status updates, execution retry for failed jobs,
+  immutable submitted contracts, and distinct execution status/comparison verdict.
+- Report scope, counts, SHA-256 provenance, retained-finding filters/search,
+  exact JSON evidence, and complete JSON/spreadsheet-safe CSV downloads.
+
+Swagger remains available for direct API access. Design-gallery fixtures are
+isolated from the real workspace.
 
 ### Run locally
 
@@ -72,6 +95,33 @@ Open <http://127.0.0.1:5173>. Vite provides React Fast Refresh during developmen
 The frontend and backend are separate processes; neither starts the other.
 Ports are strict, so an occupied port produces an error rather than silently
 opening the UI on another port.
+
+### First review: no files to prepare
+
+On the home page, select **Run synthetic demo**. It creates a real project,
+uploads the canonical `examples/source.csv` and `examples/target.csv`, and submits
+`examples/contract.json` through the normal API. Review opens automatically.
+The expected execution is **completed**, with comparison verdict **failed**:
+one changed amount (record `002`, `200` → `250`), one missing record (`003`),
+and one unexpected record (`004`). Email normalization and stage translations
+pass. Each invocation creates a separate project; no sample data is inserted on
+startup.
+
+Filter by `field_mismatch`, search for `002`, expand **Exact finding JSON**, then
+download JSON and CSV. Downloads cover the report, not the active filter.
+Open **Audit history** and reopen the run to see persisted evidence.
+
+To configure your own synthetic audit:
+
+1. Create a project; upload a source and target CSV in **Datasets**.
+2. Open **New audit**; select both snapshots and their exact record-ID columns.
+3. Add field mappings or relationship rules; review the contract JSON preview.
+4. Select **Create audit**, then inspect the verdict, scope, findings, and hashes.
+
+Relationship checks also require uploaded parent source/target snapshots and a
+named parent pair. The bundled three-record demo covers fields, not relationships.
+Builder drafts survive switching project tabs but are not saved when leaving the
+project. A changed input or rule requires a new audit; historical runs are immutable.
 
 By default, Vite forwards `/api`, `/health`, `/docs`, and `/openapi.json` to
 `http://127.0.0.1:8000`, preserving paths. Browser requests stay on the frontend
@@ -143,35 +193,42 @@ frontend/
   .env.example                  Optional server-side proxy settings
   src/
     main.jsx                    Mounts React with development StrictMode
-    App.jsx                     Page shell, workflow guidance, refresh state
-    api.js                      JSON requests and HTTP error messages
+    App.jsx                     Page shell, project/audit hash routes, refresh
+    api.js                      JSON requests, uploads, report downloads, errors
     hooks/useApiResource.js      Loading/success/error state and cancellation
+    hooks/useRoute.js            Route parsing, UUID canonicalization, focus
     components/
-      BackendStatus.jsx         GET /health/ready
-      ProjectList.jsx           GET /api/v1/projects?limit=20&offset=0
+      BackendStatus.jsx         Independent GET /health/ready
+      ProjectList.jsx           Paginated projects
+      ProjectCreate.jsx         Project submission
+      SyntheticDemo.jsx         Canonical examples → real persisted audit
+      ProjectPage.jsx           Datasets, contract builder, audit history tabs
+      DatasetPanel.jsx          Source/target uploads and snapshot metadata
+      ContractBuilder.jsx       Explicit field/relationship rules and preview
+      AuditHistory.jsx          Paginated project-scoped runs
+      AuditPage.jsx             Polling, execution errors/retry, immutable contract
+      ReportView.jsx            Verdict, provenance, filters, evidence, downloads
     styles.css                  Shared styles, focus states, mobile layout
     designs/                    Atlas, Signal, Fieldwork, and shared sample fixtures
 ```
 
-`App` owns a refresh counter. Each data component passes that counter and its
-endpoint to `useApiResource`. The hook fetches on mount and whenever either input
-changes. It clears old data during loading and exposes success or error state.
-An `AbortController` cancels obsolete requests on refresh or unmount; cancelled
-requests cannot overwrite newer state. React StrictMode exercises effect cleanup
-in development, so an initial cancelled request in the browser network panel is
-expected.
+Hash routes identify projects and audit runs without a client routing dependency.
+`useApiResource` uses an `AbortController` to prevent obsolete reads from
+overwriting newer state. Mutations have independent submission locks and error
+states. React StrictMode exercises effect cleanup in development, so cancelled
+initial requests in the network panel are expected.
 
-Readiness and projects load independently: a healthy database does not imply that
-the project request is authorized. The UI distinguishes loading, API errors,
-an empty project list, and populated results. **Refresh workspace** reloads both
-sections without reloading the document. There is no polling or client-side cache.
-Readiness checks the API/database schema, not worker availability or audit verdicts.
+Readiness and projects load independently: database readiness does not imply
+authorization or worker availability. Queued/running audits poll about every
+1.5 seconds; polling stops on terminal state or a request error. Manual reload
+resumes it. A failed refresh preserves already-loaded immutable report evidence
+and filters while clearly marking the execution state as last known.
 
-Components use semantic headings, a skip link, live status regions, visible
-keyboard focus, and a single-column layout on narrow screens. Project strings are
-rendered as React text, not raw HTML. There is no router, global state library,
-component framework, or HTTP dependency: one screen needs only React state and
-the browser's `fetch`.
+Components use semantic headings, labeled controls, a route-preserving skip link,
+live status regions, visible keyboard focus, and stacked narrow-screen layouts.
+Project and report strings render as React text, never raw HTML. Search and
+pagination apply only to retained findings; total counts remain authoritative
+when evidence is truncated.
 
 ### Build and extend
 
@@ -185,16 +242,15 @@ The build writes static assets to `frontend/dist/`. Preview serves that build at
 <http://127.0.0.1:4173> with the same local API proxy; it still requires FastAPI.
 Preview is a local build check, **not** a production server.
 
-For deployment, serve `dist/` through a static web server and route `/api`,
-`/health`, `/docs`, and `/openapi.json` to FastAPI on the same origin. Vite's proxy
-and `API_PROXY_*` settings do not travel with the static build. FastAPI and the
-existing Docker image do not serve these frontend files. Establish proper
-authentication and access controls before exposing either service publicly.
+The Compose frontend image serves the build through nginx and proxies the API on
+the same origin; see **PostgreSQL and Celery with Docker** below. Vite's
+`API_PROXY_*` settings do not travel with static assets. The API image itself
+does not serve React files. For another static host, reproduce same-origin
+routing for `/api`, `/health`, `/docs`, and `/openapi.json`.
 
-To extend the UI, add focused components under `src/components/` and request
-functions in `src/api.js`. Keep audit rules in the backend. Add routing when there
-are distinct project/audit pages; add mutation-specific state for uploads and
-submissions rather than using the read-only resource hook for writes.
+Keep audit semantics in the backend and use the existing mutation-specific state
+for uploads/submissions. Establish real authentication and access controls before
+exposing either service publicly.
 
 ## Layout
 
@@ -211,9 +267,9 @@ migrations/                Alembic schema history
 examples/                  Synthetic Salesforce-style and HubSpot-style exports
 scripts/demo.py            End-to-end API example using the standard library
 tests/                     Domain and API integration tests
-frontend/                  React + Vite read-only workspace and development proxy
+frontend/                  React workspace, browser checks, Vite proxy, nginx image
 docs/architecture.md       Design decisions, limitations, and extension roadmap
-compose.yaml               PostgreSQL + Redis + API + worker development environment
+compose.yaml               Frontend + PostgreSQL + Redis + API + worker locally
 ```
 
 ## API workflow
@@ -350,10 +406,32 @@ Install Docker with Linux container support, then run:
 docker compose up --build
 ```
 
-The migration service applies Alembic before API and worker startup. The API is
-bound to `127.0.0.1:8000`. PostgreSQL and Redis have no host ports. Uploads are shared
-between API and worker using a named volume. Database credentials in Compose are
-local-development defaults. Stop an existing local server before using port 8000.
+Open the browser workspace at <http://127.0.0.1:8080> and select **Run synthetic
+demo**. The design gallery and Swagger are available at `/designs.html` and `/docs`
+on the same origin. The frontend is a multi-stage Node build served by nginx,
+not a Vite development server.
+
+The migration service applies Alembic before API and worker startup. Frontend
+startup waits for API readiness; readiness checks the schema, not worker health.
+Ports bind to loopback: browser `8080`, API `8000`. PostgreSQL and Redis have no
+host ports. Named volumes persist the database, broker data, and snapshots shared
+by API and worker. `docker compose down` stops the stack without deleting data.
+Database credentials are local-development defaults. Stop any server already
+using these ports.
+
+nginx admits requests up to 6 MiB, allowing the backend's default 5 MiB CSV limit
+plus multipart framing. Adjust both limits deliberately if changing upload size.
+The frontend build context includes the canonical examples used by the demo.
+
+The packaged proxy deliberately does **not** inject an API key. Leave
+`AUDITOR_API_KEY` unset for this loopback synthetic browser demo. If a key is set,
+business UI requests are rejected; use Swagger's **Authorize** for direct API
+operations, or the local Vite proxy with `API_PROXY_KEY` for the browser workflow.
+Neither mode is public-user authentication.
+
+Container execution requires a Docker-enabled machine. The native browser/API
+workflow can be verified independently; do not infer PostgreSQL/Celery/nginx runtime
+verification from a Vite preview run.
 
 For a native API with external infrastructure, install `.[dev,worker,postgres]`,
 configure a PostgreSQL URL, `AUDITOR_TASK_BACKEND=celery`, and a Redis broker URL.
@@ -372,7 +450,29 @@ API and worker must share the same settings and upload storage.
 `requirements-dev.lock` records the exact tested base/development dependencies used
 by the setup above. Optional worker/PostgreSQL dependencies remain declared in
 `pyproject.toml`; install `.[worker,postgres]` in addition when those backends are
-needed. CI checks Python 3.14 and the initial PostgreSQL migration.
+needed. CI installs the locked base/development Python dependencies, checks the
+backend, exercises PostgreSQL migration upgrade/downgrade, builds both frontend
+entries, and runs Chromium against the built workspace and a real isolated API.
+The separate container smoke job is configured to build/start Compose, exercise
+nginx entry points, and run/export the synthetic audit through PostgreSQL/Celery.
+It needs a Docker-enabled runner; native browser checks do not replace it.
 
-The next milestones are review workflow and hosted-operation hardening. See the
-architecture roadmap before extending the frontend, AI mapping, or CRM connectors.
+Browser checks (after installing backend dependencies):
+
+```powershell
+cd frontend
+npm ci
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright starts its own backend and preview on ports `8765` and `4174`, with
+temporary SQLite/storage settings, no API key, and no reuse of existing servers.
+It does not touch `.data/auditor.db`. Linux CI installs Chromium system dependencies
+with `npx playwright install --with-deps chromium`.
+
+The remaining milestones are intentionally outside this local portfolio scope:
+hosted tenant authorization, durable worker recovery, encrypted storage/retention,
+live CRM connectors, and append-only reviewer acceptance decisions. See
+[`docs/architecture.md`](docs/architecture.md) for boundaries and tradeoffs.
