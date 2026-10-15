@@ -47,7 +47,7 @@ a { color: #3449ac; }
 <header><span>CRM Migration Auditor</span><span>Understanding &amp; interview preparation</span></header>
 <main>
 <h1>Understand the project.<br>Explain the decisions.<br>Defend the limits.</h1>
-<p class="small">Eight-page study guide • Backend/engine version 0.2.0, with current frontend additions • Prepared 9 October 2026</p>
+<p class="small">Eight-page study guide • Backend/engine version 0.2.0, with current frontend additions • Updated 15 October 2026</p>
 <h3>1. Start with the business problem</h3>
 <p>A CRM (customer relationship management system) stores customers, contacts, companies, and deals. When records move between systems, IDs, field names, values, and links can change. Matching row counts alone does not establish that the right information moved.</p>
 <p>This auditor checks <strong>exported source and target CSV snapshots</strong> against an explicit JSON contract. It identifies missing or unexpected records, changed mapped values, ambiguous identities, and declared parent-link problems. It produces reviewable evidence rather than a blanket migration certificate.</p>
@@ -200,7 +200,7 @@ npm run build
 npx playwright install chromium
 npm run test:e2e</code></pre>
 <p>Playwright exercises built assets, a real API, and temporary SQLite storage: uploads/rules, findings, history, exports, precision boundaries, keyboard navigation, uppercase IDs, and offline refresh. CI adds PostgreSQL migration and Compose smoke jobs.</p>
-<div class="callout"><strong>Evidence you can cite accurately</strong><p>The portfolio-completion run observed 55 backend tests passing, 97% app coverage (excluding the Celery adapter), Ruff passing, a successful production build, and one passing Chromium end-to-end test. Desktop/mobile smoke was exercised. Docker was unavailable: no local container/PostgreSQL/Celery runtime success was observed.</p></div>
+<div class="callout"><strong>Evidence you can cite accurately</strong><p>Use results from the current checkout, not a historical test count or coverage percentage. Report backend tests, lint/format checks, the production build, and actual browser scenarios separately. State whether Docker, PostgreSQL, Redis, and Celery were exercised; native SQLite/browser success does not verify those runtimes. Configured CI jobs are not observed results.</p></div>
 <div class="sources">Reference: <code>frontend/src/hooks/</code>, <code>components/AuditPage.jsx</code>, <code>vite.config.js</code>, <code>playwright.config.js</code>, <code>compose.yaml</code>, <code>.github/workflows/ci.yml</code>.</div>
 </main><footer><span>Checkpoint: separate configured checks from observed results.</span><span>6 / 8</span></footer>
 </section>

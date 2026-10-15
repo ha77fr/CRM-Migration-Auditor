@@ -1,4 +1,5 @@
 import json
+from decimal import Clamped, Subnormal, localcontext
 from pathlib import Path
 
 import pytest
@@ -201,3 +202,55 @@ def test_decimal_whitespace_requires_explicit_strip():
         ],
     )
     assert report.verdict == "passed"
+
+
+@pytest.mark.parametrize(
+    "value,tolerance,settings,signal,verdict",
+    [
+        ("1000", "1000", {"Emax": 2}, None, "passed"),
+        ("1e-18", "0", {"Emin": 0}, Subnormal, "failed"),
+        ("1e18", "0", {"Emax": 50, "clamp": 1}, Clamped, "failed"),
+    ],
+)
+def test_decimal_comparison_is_independent_of_ambient_context(
+    value, tolerance, settings, signal, verdict
+):
+    fields = [
+        {
+            "source": "value",
+            "target": "value",
+            "comparison": "decimal",
+            "tolerance": tolerance,
+        }
+    ]
+    source = f"id,value\n1,{value}\n"
+    target = "id,value\n1,0\n"
+    baseline = run(source, target, fields=fields)
+    assert baseline.verdict == verdict
+    assert baseline.compared_fields == 1
+    with localcontext(**settings) as context:
+        if signal is not None:
+            context.traps[signal] = True
+        constrained = run(source, target, fields=fields)
+    assert constrained == baseline
+
+
+@pytest.mark.parametrize(
+    "actual,verdict",
+    [("0", "failed"), ("0.000000000000000001", "passed")],
+)
+def test_decimal_subtraction_retains_small_difference_at_large_tolerance(actual, verdict):
+    report = run(
+        "id,value\n1,10000000000000000000.000000000000000001\n",
+        f"id,value\n1,{actual}\n",
+        fields=[
+            {
+                "source": "value",
+                "target": "value",
+                "comparison": "decimal",
+                "tolerance": "10000000000000000000",
+            }
+        ],
+    )
+    assert report.verdict == verdict
+    assert report.compared_fields == 1

@@ -138,8 +138,8 @@ def compare(
             if rule.comparison == "decimal":
                 try:
                     expected_number, actual_number = decimal_value(expected), decimal_value(actual)
-                    with localcontext() as context:
-                        context.prec = 100
+                    # Keep exact admitted arithmetic independent of the caller's decimal context.
+                    with localcontext(prec=100, Emax=100, Emin=-100, clamp=0):
                         equal = abs(expected_number - actual_number) <= rule.tolerance
                 except DecimalException:
                     add(

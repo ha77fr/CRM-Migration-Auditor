@@ -3,6 +3,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base
 
@@ -17,6 +18,7 @@ class Database:
             url,
             pool_pre_ping=True,
             connect_args={"check_same_thread": False, "timeout": 30} if sqlite else {},
+            poolclass=StaticPool if sqlite and parsed.database in (None, "", ":memory:") else None,
         )
         if sqlite:
 

@@ -4,6 +4,8 @@ import './ContractBuilder.css';
 
 const PAIR_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+// Match Python's blank-ID check while preserving BOM as an exact ID character.
+const BLANK_ID = /^[\p{White_Space}\u001c-\u001f]*$/u;
 const emptyContract = () => ({
   source_dataset_id: '', target_dataset_id: '', source_key: '', target_key: '',
   fields: [], key_map: [], parent_pairs: [], relationships: [],
@@ -106,7 +108,7 @@ function prepareContract(state, datasets, projectId) {
   if (!source) errors.push('Select a primary source dataset from this project.');
   if (!target) errors.push('Select a primary target dataset from this project.');
   const checkHeader = (header, dataset, label) => {
-    if (!header || !header.trim() || header.length > 255 || !dataset?.headers.includes(header)) errors.push(`${label}: select a valid column from the chosen dataset.`);
+    if (!dataset?.headers.includes(header)) errors.push(`${label}: select a valid column from the chosen dataset.`);
   };
   const checkMap = (rows, label, ids = false) => {
     if (rows.length > (ids ? 25000 : 1000)) errors.push(`${label}: too many mapping rows.`);
@@ -118,7 +120,7 @@ function prepareContract(state, datasets, projectId) {
     for (const row of rows) {
       if (sources.has(row.source)) duplicateSource = true;
       if (targets.has(row.target)) duplicateTarget = true;
-      if (ids && (!row.source.trim() || !row.target.trim())) emptyId = true;
+      if (ids && (BLANK_ID.test(row.source) || BLANK_ID.test(row.target))) emptyId = true;
       sources.add(row.source);
       targets.add(row.target);
     }

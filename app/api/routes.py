@@ -48,7 +48,14 @@ def dispatch(audit: AuditRun, request: Request, background_tasks: BackgroundTask
     try:
         from app.workers.celery_app import celery_app
 
-        celery_app.send_task("auditor.execute", args=[audit.id], task_id=audit.id, retry=False)
+        with celery_app.connection_for_write(settings.broker_url) as connection:
+            celery_app.send_task(
+                "auditor.execute",
+                args=[audit.id],
+                task_id=audit.id,
+                retry=False,
+                connection=connection,
+            )
     except Exception as exc:
         logger.error("Dispatch %s failed (%s)", audit.id, type(exc).__name__)
         # A broker timeout can be ambiguous. Only fail a run that has not been claimed.

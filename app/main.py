@@ -1,6 +1,10 @@
+import json
 from contextlib import asynccontextmanager
+from math import isfinite
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -40,6 +44,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(router)
     application.include_router(report_exports_router)
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, exc: RequestValidationError):
+        # Rejected inputs can contain non-finite numbers or invalid Unicode.
+        detail = jsonable_encoder(
+            exc.errors(),
+            custom_encoder={float: lambda value: value if isfinite(value) else str(value)},
+        )
+        return Response(
+            content=json.dumps({"detail": detail}, ensure_ascii=True, allow_nan=False),
+            status_code=422,
+            media_type="application/json",
+        )
 
     @application.get("/", tags=["system"])
     def root():

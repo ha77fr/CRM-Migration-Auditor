@@ -289,6 +289,8 @@ All business endpoints are below `/api/v1`:
 Projects, datasets, and audit runs also have list endpoints with `limit` and
 `offset`. `/health/live` checks HTTP availability; `/health/ready` checks the
 database schema. Readiness does **not** verify worker availability.
+API timestamps include an explicit UTC offset, including records reloaded from
+SQLite.
 
 Example contract (`examples/contract.json` contains a larger example):
 
@@ -369,8 +371,9 @@ from field and relationship comparisons. Verdicts: uncertainty takes precedence
 Copy `.env.example` to `.env` if you need overrides. All settings use the
 `AUDITOR_` prefix. Defaults limit individual CSVs to 5 MiB / 25,000 data records,
 200 columns, and reports to 1,000 findings. Counts still include all findings;
-the report explicitly marks truncation. Evidence strings are capped at 500
-characters. The immutable original file retains the complete value.
+the report explicitly marks truncation. Long evidence strings retain their first
+500 characters plus a truncation marker. The immutable original file retains the
+complete value.
 
 JSON downloads preserve the stored report exactly. CSV downloads include verdict,
 row/comparison counts, finding counts, truncation state, scope, input hashes, and
@@ -447,12 +450,25 @@ API and worker must share the same settings and upload storage.
 .\.venv\Scripts\python.exe -m ruff format --check .
 ```
 
-`requirements-dev.lock` records the exact tested base/development dependencies used
-by the setup above. Optional worker/PostgreSQL dependencies remain declared in
-`pyproject.toml`; install `.[worker,postgres]` in addition when those backends are
-needed. CI installs the locked base/development Python dependencies, checks the
-backend, exercises PostgreSQL migration upgrade/downgrade, builds both frontend
-entries, and runs Chromium against the built workspace and a real isolated API.
+`uv.lock` is the resolution source for Python dependencies, including optional
+worker/PostgreSQL extras. `requirements-dev.lock` is its base/development export
+used by the pip setup and CI. To refresh both together with uv:
+
+```powershell
+uv lock --upgrade
+uv export --extra dev --no-emit-project --no-hashes --no-header --no-annotate --no-default-groups --output-file requirements-dev.lock
+```
+
+Install the refreshed lock in the project environment and run the checks above.
+The development extra uses HTTPX2 for the current Starlette/FastAPI TestClient.
+Optional worker/PostgreSQL dependencies remain declared in `pyproject.toml`;
+install `.[worker,postgres]` in addition when those backends are needed.
+SQLAlchemy intentionally remains on the supported 2.0 line (`<2.1`); a newer
+upstream release is not automatically a compatible upgrade.
+
+CI installs the locked base/development Python dependencies, checks the backend,
+exercises PostgreSQL migration upgrade/downgrade, builds both frontend entries,
+and runs Chromium against the built workspace and a real isolated API.
 The separate container smoke job is configured to build/start Compose, exercise
 nginx entry points, and run/export the synthetic audit through PostgreSQL/Celery.
 It needs a Docker-enabled runner; native browser checks do not replace it.

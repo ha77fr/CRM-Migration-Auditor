@@ -1,5 +1,7 @@
 import json
 import sys
+from contextlib import nullcontext
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -123,7 +125,11 @@ def test_queue_outage_is_recorded_and_retryable(client, settings, monkeypatch):
     def unavailable(*_args, **_kwargs):
         raise ConnectionError("Private broker detail must not reach the response")
 
-    fake = SimpleNamespace(celery_app=SimpleNamespace(send_task=unavailable))
+    fake = SimpleNamespace(
+        celery_app=SimpleNamespace(
+            send_task=unavailable, connection_for_write=lambda *_: nullcontext()
+        )
+    )
     monkeypatch.setitem(sys.modules, "app.workers.celery_app", fake)
     settings.task_backend = "celery"
     response = client.post(base + "/audits", json=payload)
@@ -134,6 +140,31 @@ def test_queue_outage_is_recorded_and_retryable(client, settings, monkeypatch):
     settings.task_backend = "local"
     assert client.post(path + "/retry").status_code == 202
     assert client.get(path).json()["status"] == "completed"
+
+
+def test_celery_dispatch_uses_the_application_broker(client, settings):
+    pytest.importorskip("celery")
+    from kombu import Connection
+
+    base, payload = prepared(client)
+    settings.task_backend = "celery"
+    settings.broker_url = "memory://"
+    with Connection(settings.broker_url) as connection:
+        with connection.SimpleQueue("celery") as queue:
+            queue.clear()
+            response = client.post(base + "/audits", json=payload)
+            assert response.status_code == 202
+            audit_id = response.json()["id"]
+            message = queue.get(block=True, timeout=1)
+            try:
+                assert message.headers["task"] == "auditor.execute"
+                assert message.headers["id"] == audit_id
+                assert message.payload[0] == [audit_id]
+            finally:
+                message.ack()
+    path = f"{base}/audits/{audit_id}"
+    assert client.get(path).json()["status"] == "queued"
+    assert client.get(path + "/report").status_code == 409
 
 
 def test_optional_api_key_and_health(settings):
@@ -153,6 +184,48 @@ def test_ready_requires_schema(settings):
     ) as client:
         assert client.get("/health/live").status_code == 200
         assert client.get("/health/ready").status_code == 503
+
+
+@pytest.mark.parametrize("database_url", ["sqlite://", "sqlite:///:memory:"])
+def test_in_memory_database_is_shared_with_request_and_background_threads(settings, database_url):
+    configured = settings.model_copy(update={"database_url": database_url})
+    with TestClient(create_app(configured)) as connection:
+        assert connection.get("/health/ready").status_code == 200
+        base, payload = prepared(connection)
+        created = connection.post(base + "/audits", json=payload)
+        assert created.status_code == 202
+        path = f"{base}/audits/{created.json()['id']}"
+        assert connection.get(path).json()["status"] == "completed"
+        assert connection.get(path + "/report").status_code == 200
+        assert len(connection.get(base + "/datasets").json()) == 2
+
+
+@pytest.mark.parametrize("field", ["name", "description"])
+def test_invalid_unicode_project_input_returns_validation_error(client, field):
+    payload = {"name": "Valid name", field: "\ud800"}
+    response = client.post(
+        "/api/v1/projects",
+        content=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", field]
+    assert client.get("/api/v1/projects").json() == []
+
+
+@pytest.mark.parametrize("number", ["NaN", "Infinity", "-Infinity", "1e999"])
+def test_non_finite_tolerance_returns_json_validation_error(client, number):
+    base, payload = prepared(client)
+    payload["contract"]["fields"][0]["tolerance"] = "invalid-number"
+    body = json.dumps(payload).replace('"invalid-number"', number)
+    response = client.post(
+        base + "/audits", content=body, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["type"] == "finite_number"
+    assert error["loc"] == ["body", "contract", "fields", 0, "tolerance"]
+    assert client.get(base + "/audits").json() == []
 
 
 def relationship_prepared(client):
@@ -284,3 +357,21 @@ def test_company_contact_deal_hierarchy_checks_both_parent_pairs(client):
     payload["target_dataset_id"] = corrected["id"]
     corrected_run = client.post(base + "/audits", json=payload).json()
     assert client.get(f"{base}/audits/{corrected_run['id']}/report").json()["verdict"] == "passed"
+
+
+def test_persisted_timestamps_remain_utc_across_reloads(client, settings):
+    base, payload = prepared(client)
+    response = client.post(base + "/audits", json=payload)
+    assert response.status_code == 202
+    created = response.json()
+    path = f"{base}/audits/{created['id']}"
+    audit = client.get(path).json()
+    assert audit["created_at"] == created["created_at"]
+    timestamps = [
+        client.get(base).json()["created_at"],
+        *(dataset["created_at"] for dataset in client.get(base + "/datasets").json()),
+        *(audit[field] for field in ("created_at", "started_at", "finished_at")),
+    ]
+    assert all(datetime.fromisoformat(value).tzinfo == UTC for value in timestamps)
+    with TestClient(create_app(settings)) as reopened:
+        assert reopened.get(path).json() == audit

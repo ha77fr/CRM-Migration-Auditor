@@ -184,7 +184,7 @@ roadmap items are not requirements of the local single-user deliverable:
    a contract. Start with column metadata and synthetic examples, add an evaluated
    benchmark against a simple name-matching baseline, and keep final checks deterministic.
 4. **Hosted operation:** tenant authentication/authorization, real worker recovery,
-   S3 storage, retention, observability, migration tests on PostgreSQL, and billing.
+   S3 storage, retention, observability, PostgreSQL workload/concurrency verification, and billing.
 5. **Connectors:** read-only CRM exports with rate-limit handling, completeness
    manifests, and permission scoping. Maintain CSV admission as an independent path.
 

@@ -214,3 +214,61 @@ test('create, compare, reopen and export a synthetic migration audit', async ({ 
     expect(csv).toMatch(new RegExp(`^input_sha256,${side},${digest},`, 'm'));
   }
 });
+
+test('create an audit with exact Unicode headers and ID maps accepted by the API', async ({ page }) => {
+  const projectResponse = await page.request.post('/api/v1/projects', {
+    data: { name: 'Unicode column browser review' },
+  });
+  expect(projectResponse.ok()).toBeTruthy();
+  const project = await projectResponse.json();
+  const keyHeader = '\u{1f511}'.repeat(255);
+  const valueHeader = '\u{1f600}'.repeat(255);
+  const bomHeader = '\ufeff';
+  const datasets = {};
+  for (const side of ['source', 'target']) {
+    const key = side === 'source' ? '\ufeff' : '001';
+    const csv = `${keyHeader},${valueHeader},${bomHeader}\n${key},same,exact\n`;
+    const response = await page.request.post(`/api/v1/projects/${project.id}/datasets?side=${side}`, {
+      multipart: {
+        file: { name: `${side}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) },
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    datasets[side] = await response.json();
+  }
+
+  await page.goto(`/#/projects/${project.id}?view=audit`);
+  const builder = page.getByRole('region', { name: 'Create an audit', exact: true });
+  await builder.getByRole('combobox', { name: 'Primary source dataset', exact: true }).selectOption(datasets.source.id);
+  await builder.getByRole('combobox', { name: 'Primary target dataset', exact: true }).selectOption(datasets.target.id);
+  await builder.getByRole('combobox', { name: 'Primary source key', exact: true }).selectOption(keyHeader);
+  await builder.getByRole('combobox', { name: 'Primary target key', exact: true }).selectOption(keyHeader);
+  for (const [index, header] of [valueHeader, bomHeader].entries()) {
+    await builder.getByRole('button', { name: 'Add field mapping', exact: true }).click();
+    await builder.getByRole('combobox', { name: `Field ${index + 1} source column`, exact: true }).selectOption(header);
+    await builder.getByRole('combobox', { name: `Field ${index + 1} target column`, exact: true }).selectOption(header);
+  }
+  await builder.getByText('Primary ID map (0)', { exact: true }).click();
+  await builder.getByRole('button', { name: 'Add primary id map row', exact: true }).click();
+  const sourceIdInput = builder.getByLabel('Primary ID map 1: source ID', { exact: true });
+  await builder.getByLabel('Primary ID map 1: target ID', { exact: true }).fill('001');
+  for (const blankId of ['\u0085', '\u001c', ' ']) {
+    await sourceIdInput.fill(blankId);
+    await builder.getByRole('button', { name: 'Create audit', exact: true }).click();
+    await expect(builder.getByRole('alert')).toContainText('Primary ID map: source and target IDs must not be blank.');
+    await expect(builder.locator('.contract-preview pre')).toHaveCount(0);
+  }
+  await sourceIdInput.fill('\ufeff');
+  await builder.getByText('Read-only contract JSON preview', { exact: true }).click();
+  const contract = JSON.parse(await builder.locator('.contract-preview pre').textContent());
+  expect(contract.source_key).toBe(keyHeader);
+  expect(contract.target_key).toBe(keyHeader);
+  expect(contract.key_map).toEqual({ '\ufeff': '001' });
+  expect(contract.fields.map(({ source, target }) => [source, target])).toEqual([
+    [valueHeader, valueHeader], [bomHeader, bomHeader],
+  ]);
+  await builder.getByRole('button', { name: 'Create audit', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Audit details', exact: true })).toBeVisible();
+  await expect(page.getByText('Execution status: completed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Comparison verdict: passed', { exact: true })).toBeVisible();
+});
